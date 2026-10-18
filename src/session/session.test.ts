@@ -222,3 +222,154 @@ describe('host and client sessions', () => {
     expect(parseIntent({ kind: 'start', extra: 1 })).toEqual({ kind: 'start' });
   });
 });
+
+/** Answers this session's open prompt with its first choice. Returns false when it has none. */
+function answerFirst(s: ClientSession | HostSession): boolean {
+  const p = s.state().view?.game?.prompt;
+  if (!p) return false;
+  const value =
+    p.kind === 'play' ? [p.choices[0]] : p.kind === 'confirm' ? false : p.kind === 'choosePosition' ? 0 : p.choices[0];
+  s.act({ kind: 'answer', promptId: p.id, value });
+  return true;
+}
+
+function gameSetup() {
+  const net = createMemoryNetwork();
+  const store = memoryStore();
+  const host = new HostSession({ code: CODE, me: id('Hana', '#f2a93b'), transport: net.join('host'), packs: [pets], store, seed: () => 7 });
+  const tom = new ClientSession({ code: CODE, me: id('Tom'), transport: net.join('tom') });
+  net.flush();
+  return { net, store, host, tom };
+}
+
+describe('games through the session', () => {
+  it('plays a whole game between host and client', () => {
+    const { net, host, tom } = gameSetup();
+    tom.act({ kind: 'start' });
+    net.flush();
+    expect(host.state().view?.game).toBeNull();
+
+    host.act({ kind: 'start' });
+    net.flush();
+    expect(tom.state().view?.lobby.phase).toBe('playing');
+    expect(tom.state().view?.game?.you).toBe(1);
+    expect(host.state().view?.game?.you).toBe(0);
+    expect(tom.state().view?.game?.hand.length).toBeGreaterThan(0);
+
+    for (let i = 0; i < 2000 && host.state().view?.game?.phase !== 'gameOver'; i++) {
+      const game = host.state().view!.game!;
+      if (game.phase === 'roundOver') {
+        tom.act({ kind: 'nextRound' });
+        net.flush();
+        expect(host.state().view!.game!.phase).toBe('roundOver');
+        host.act({ kind: 'nextRound' });
+      } else if (!answerFirst(host)) {
+        expect(answerFirst(tom)).toBe(true);
+      }
+      net.flush();
+    }
+    const end = tom.state().view!.game!;
+    expect(end.phase).toBe('gameOver');
+    expect(end.winners.length).toBeGreaterThan(0);
+
+    host.act({ kind: 'rematch' });
+    net.flush();
+    expect(tom.state().view!.game!.round).toBe(1);
+    host.act({ kind: 'endGame' });
+    net.flush();
+    expect(tom.state().view!.game).toBeNull();
+    expect(tom.state().view!.lobby.phase).toBe('lobby');
+  });
+
+  it('ignores answers from the wrong player', () => {
+    const { net, host, tom } = gameSetup();
+    host.act({ kind: 'start' });
+    net.flush();
+    const game = host.state().view!.game!;
+    const asked = game.prompt ? host : tom;
+    const other = asked === host ? tom : host;
+    const p = asked.state().view!.game!.prompt!;
+    expect(other.state().view!.game!.prompt).toBeNull();
+    other.act({ kind: 'answer', promptId: p.id, value: p.kind === 'play' ? [p.choices[0]] : 0 });
+    net.flush();
+    expect(asked.state().view!.game!.prompt?.id).toBe(p.id);
+  });
+
+  it('marks players away, resumes after a host reload mid-game, and lets the client go on', () => {
+    const { net, store, host, tom } = gameSetup();
+    host.act({ kind: 'start' });
+    net.flush();
+    tom.leave();
+    net.flush();
+    expect(host.state().view!.game!.players[1]!.connected).toBe(false);
+
+    const tom2 = new ClientSession({ code: CODE, me: id('Tom'), transport: net.join('tom-2') });
+    net.flush();
+    expect(host.state().view!.game!.players[1]!.connected).toBe(true);
+    const before = host.state().view!.game!;
+
+    host.leave();
+    net.flush();
+    const reloaded = new HostSession({ code: CODE, me: id('Hana', '#f2a93b'), transport: net.join('host-2'), packs: [pets], store });
+    net.flush();
+    const after = reloaded.state().view!.game!;
+    expect(after.round).toBe(before.round);
+    expect(after.waiting).toEqual(before.waiting);
+    expect(tom2.state().status).toBe('connected');
+    expect(tom2.state().view!.game!.players[1]!.connected).toBe(true);
+    const asked = after.prompt ? reloaded : tom2;
+    expect(answerFirst(asked)).toBe(true);
+    net.flush();
+    expect(reloaded.state().view!.game!.log.length).toBeGreaterThan(before.log.length);
+  });
+
+  it('seats late joiners as spectators who see only public cards', () => {
+    const { net, host } = gameSetup();
+    host.act({ kind: 'start' });
+    net.flush();
+    const mia = new ClientSession({ code: CODE, me: id('Mia'), transport: net.join('mia') });
+    net.flush();
+    const view = mia.state().view!;
+    expect(view.game?.you).toBeNull();
+    expect(view.game?.hand).toEqual([]);
+    expect(view.lobby.players.find((p) => p.name === 'Mia')?.role).toBe('spectator');
+    expect(view.game?.players.every((p) => p.hand.known.length === 0)).toBe(true);
+  });
+
+  it('lets the host hand an away seat to a new device, and kick a player for the round', () => {
+    const net = createMemoryNetwork();
+    const host = new HostSession({ code: CODE, me: id('Hana'), transport: net.join('host'), packs: [pets], seed: () => 3 });
+    const tom = new ClientSession({ code: CODE, me: id('Tom'), transport: net.join('tom') });
+    new ClientSession({ code: CODE, me: id('Mia'), transport: net.join('mia') });
+    net.flush();
+    host.act({ kind: 'start' });
+    net.flush();
+    tom.leave();
+    const phone = new ClientSession({ code: CODE, me: id('TomPhone'), transport: net.join('phone') });
+    net.flush();
+    expect(phone.state().view!.game!.you).toBeNull();
+    host.act({ kind: 'assignSeat', seatOf: 'id-Tom', to: 'id-TomPhone' });
+    net.flush();
+    expect(phone.state().view!.game!.you).toBe(1);
+    expect(phone.state().view!.game!.players[1]!.name).toBe('TomPhone');
+
+    const mia = host.state().view!.game!.players[2]!;
+    host.act({ kind: 'kickForRound', playerId: 'id-Mia' });
+    net.flush();
+    expect(host.state().view!.game!.players[2]!.round).toBe(mia.round === 'in' ? 'out' : mia.round);
+  });
+
+  it('explains why the next round cannot start', () => {
+    const { net, host, tom } = gameSetup();
+    host.act({ kind: 'start' });
+    net.flush();
+    for (let i = 0; i < 200 && host.state().view!.game!.phase === 'round'; i++) {
+      if (!answerFirst(host)) answerFirst(tom);
+      net.flush();
+    }
+    expect(host.state().view!.game!.phase).toBe('roundOver');
+    tom.leave();
+    net.flush();
+    expect(host.state().view!.lobby.startBlocked).toBe('Waiting for Tom to come back.');
+  });
+});

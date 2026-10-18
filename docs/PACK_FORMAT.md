@@ -7,7 +7,7 @@ Reference pack: [public/packs/power-hungry-pets](../public/packs/power-hungry-pe
 
 Status markers in this document:
 
-- **M2** means planned for milestone 2 (the Power Hungry Pets engine).
+- **M2** means built in milestone 2 (the Power Hungry Pets engine).
 - **Future** means designed but not scheduled. A pack that uses a future op is rejected.
 
 ## Folder layout
@@ -125,8 +125,8 @@ Options appear in the lobby. Rules refer to them with `{ "option": "<id>" }`.
 
 | Field | Meaning |
 |---|---|
-| `zones` | Shared zones. Visibility `hidden` (count only), `public` |
-| `playerZones` | Zones every player has. Visibility `owner` (only the owner sees), `public` |
+| `zones` | Shared zones. Visibility `hidden` (count only), `public`. Optional `label` names the zone in logs, like `"the draw pile"`. The engine needs a `deck` zone |
+| `playerZones` | Zones every player has. Visibility `owner` (only the owner sees), `public`. Optional `label`. The engine needs `hand` and `played` |
 | `statuses` | Status definitions. `untargetable: true` means choosers and group selectors skip the player |
 | `roundSetup` | Ops run at the start of every round, for the players in that round |
 | `turn` | Ops run for each turn. `self` is the active player |
@@ -189,7 +189,7 @@ the current effect is skipped. The card still counts as played.
 | Op | Params | Status |
 |---|---|---|
 | `choosePlayer` | `as`, `from`, `holding?` (card id), `auto?`, `includeProtected?` | M2. `auto` skips the prompt when exactly one player fits. Untargetable players are skipped unless `includeProtected` |
-| `selectPlayers` | `as`, `from` | M2. No prompt. Stores every fitting player |
+| `selectPlayers` | `as`, `from`, `includeProtected?` | M2. No prompt. Stores every fitting player |
 | `guess` | `as`, `exclude?` (values) | M2. Pick a card value present in the merged deck. Logged for everyone |
 | `choosePosition` | `zone`, `as` | M2. 0 is the top |
 | `confirm` | `as`, `text` | M2. Yes or no |
@@ -272,9 +272,12 @@ example `addons/big-litter.json: cards.modify.crystal-bwol: no card with this id
 
 Checked:
 
-- Every op is known to this engine version, and its required params are present.
+- Every op is known to this engine version, and its required params are present. Unknown params
+  are errors too, so a typo like `form` for `from` is caught.
+- `roundSetup` never asks a player anything.
+- Every `$variable` is set by an earlier op (`as`) in the same effect.
 - Card ids are unique. Every referenced card id, zone, status, option and variable exists.
 - Every count resolves for every player count the merged pack allows.
 - The deck is big enough: cards dealt and set aside in setup, plus at least one draw per
-  player, for the maximum player count.
+  player, for every player count the pack allows. Setup really runs to check this.
 - Image paths exist and use an allowed type.

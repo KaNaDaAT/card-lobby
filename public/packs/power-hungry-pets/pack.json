@@ -34,9 +34,9 @@
   ],
   "rules": {
     "zones": {
-      "deck": { "visibility": "hidden" },
-      "setAside": { "visibility": "hidden" },
-      "setAsideOpen": { "visibility": "public" }
+      "deck": { "visibility": "hidden", "label": "the draw pile" },
+      "setAside": { "visibility": "hidden", "label": "the face-down set-aside card" },
+      "setAsideOpen": { "visibility": "public", "label": "the face-up set-aside cards" }
     },
     "playerZones": {
       "hand": { "visibility": "owner" },
@@ -117,7 +117,8 @@
       "onPlay": [
         { "op": "peek", "zone": "deck", "count": 1, "as": "top" },
         { "op": "choosePosition", "zone": "deck", "as": "pos" },
-        { "op": "move", "card": "$top", "from": "deck", "to": "deck", "at": "$pos" }
+        { "op": "move", "card": "$top", "from": "deck", "to": "deck", "at": "$pos" },
+        { "op": "log", "text": "{self} puts it back somewhere in the draw pile." }
       ]
     },
     {

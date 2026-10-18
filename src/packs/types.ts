@@ -74,8 +74,9 @@ export type OptionValue = string | number | boolean;
 export type Visibility = 'public' | 'owner' | 'hidden';
 
 export interface Rules {
-  zones: Record<string, { visibility: 'public' | 'hidden' }>;
-  playerZones: Record<string, { visibility: 'public' | 'owner' }>;
+  /** `label` names the zone in logs and on the table, like "the draw pile". */
+  zones: Record<string, { visibility: 'public' | 'hidden'; label?: string }>;
+  playerZones: Record<string, { visibility: 'public' | 'owner'; label?: string }>;
   statuses?: Record<string, { label: string; untargetable?: boolean }>;
   roundSetup: Op[];
   turn: Op[];

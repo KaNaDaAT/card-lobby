@@ -1,10 +1,12 @@
 /**
  * The host's side of a room. The host is authoritative: it keeps the members, lobby settings,
- * chat and (from milestone 2) the game, validates every intent, and sends each member a
- * personal view after every change. See docs/DESIGN.md, "Host-authoritative model".
+ * chat and the game, validates every intent, runs the engine, and sends each member a personal
+ * view after every change. See docs/DESIGN.md, "Host-authoritative model".
  *
  * Everything that arrives from the network is untrusted and checked here before use.
  */
+import { apply, startGame, viewFor } from '../engine/index';
+import type { GameState, Input, Seat } from '../engine/types';
 import { safeColor, type Identity } from '../identity';
 import {
   ACTION,
@@ -19,7 +21,9 @@ import {
   type View,
 } from '../net/protocol';
 import type { Channel, Transport } from '../net/transport';
-import type { LoadedPack, OptionValue } from '../packs/types';
+import { mergeAddons } from '../packs/merge';
+import type { LoadedPack, OptionValue, Pack } from '../packs/types';
+import { validateSelection } from '../packs/validate';
 import { mergeSelection, optionValueOk, startBlocked, type Selection } from './lobby';
 import type { Session, SessionState } from './types';
 
@@ -38,6 +42,8 @@ export interface HostOptions {
   packs: LoadedPack[];
   store?: SnapshotStore;
   now?: () => number;
+  /** Seeds each game's PRNG. Random by default. */
+  seed?: () => number;
 }
 
 interface Member {
@@ -50,7 +56,15 @@ interface Member {
   seen: boolean;
 }
 
-/** What the host saves after every change, so a reload resumes the room. */
+interface Game {
+  packId: string;
+  addons: string[];
+  /** The merged pack the game runs on. Rebuilt from packId and addons on resume. */
+  pack: Pack;
+  state: GameState;
+}
+
+/** What the host saves after every change, so a reload resumes the room, even mid-game. */
 interface Snapshot {
   v: 1;
   seq: number;
@@ -60,7 +74,10 @@ interface Snapshot {
   addons: string[];
   options: Record<string, OptionValue>;
   chat: ChatMessage[];
+  game: { packId: string; addons: string[]; state: GameState } | null;
 }
+
+const randomSeed = () => crypto.getRandomValues(new Uint32Array(1))[0]!;
 
 export class HostSession implements Session {
   readonly isHost = true;
@@ -71,14 +88,17 @@ export class HostSession implements Session {
   private readonly packs: LoadedPack[];
   private readonly store: SnapshotStore | undefined;
   private readonly now: () => number;
+  private readonly seed: () => number;
   private readonly listeners = new Set<() => void>();
   private readonly out: { view: Channel<View>; chat: Channel<ChatPayload> };
+  private readonly validation = new Map<string, string[]>();
 
   private members: Member[];
   private packId: string | null = null;
   private addons: string[] = [];
   private options: Record<string, OptionValue> = {};
   private chat: ChatMessage[] = [];
+  private game: Game | null = null;
   private seq = 0;
   private chatCounter = 0;
   private ownView: View | null = null;
@@ -89,6 +109,7 @@ export class HostSession implements Session {
     this.packs = opts.packs;
     this.store = opts.store;
     this.now = opts.now ?? Date.now;
+    this.seed = opts.seed ?? randomSeed;
     this.playerId = opts.me.playerId;
     const self: Member = { ...pickIdentity(opts.me), peerId: opts.transport.selfId, seen: true };
     this.members = [self];
@@ -105,6 +126,7 @@ export class HostSession implements Session {
       this.chat = saved.chat;
       this.seq = saved.seq;
       this.chatCounter = saved.chatCounter;
+      this.game = this.resumeGame(saved.game);
     } else {
       this.system('Lobby created. Share the link or code to invite friends.');
     }
@@ -171,8 +193,9 @@ export class HostSession implements Session {
     } else {
       member = { ...pickIdentity(hello), peerId, seen: true };
       this.members.push(member);
-      this.system(`${member.name} joined.`);
+      this.system(this.game ? `${member.name} joined and is watching.` : `${member.name} joined.`);
     }
+    this.syncConnection(member);
     // View first: clients lock onto the host by its first view and ignore chat before that.
     this.broadcast();
     void this.out.chat.send({ messages: this.chat, history: true }, peerId);
@@ -183,6 +206,7 @@ export class HostSession implements Session {
     if (!member || member === this.members[0]) return;
     member.peerId = null;
     this.system(`${member.name} left.`);
+    this.syncConnection(member);
     this.broadcast();
   }
 
@@ -190,22 +214,45 @@ export class HostSession implements Session {
 
   private handle(from: Member, intent: Intent): void {
     const isHost = from === this.members[0];
+    const inLobby = this.game === null;
     let changed = false;
     switch (intent.kind) {
       case 'selectPack':
-        changed = isHost && this.selectPack(intent.packId);
+        changed = isHost && inLobby && this.selectPack(intent.packId);
         break;
       case 'toggleAddon':
-        changed = isHost && this.toggleAddon(intent.addonId, intent.on);
+        changed = isHost && inLobby && this.toggleAddon(intent.addonId, intent.on);
         break;
       case 'setOption':
-        changed = isHost && this.setOption(intent.id, intent.value);
+        changed = isHost && inLobby && this.setOption(intent.id, intent.value);
         break;
       case 'removePlayer':
         changed = isHost && this.removePlayer(intent.playerId);
         break;
-      default:
-        // Game intents arrive with the engine (milestone 2).
+      case 'start':
+        changed = isHost && inLobby && this.start();
+        break;
+      case 'rematch':
+        changed = isHost && this.game?.state.phase === 'gameOver' && this.start();
+        break;
+      case 'endGame':
+        changed = isHost && this.endGame();
+        break;
+      case 'answer': {
+        const seat = this.seatOf(from.playerId);
+        changed = seat !== null && this.input({ kind: 'answer', seat, promptId: intent.promptId, value: intent.value });
+        break;
+      }
+      case 'nextRound':
+        changed = isHost && this.input({ kind: 'nextRound' });
+        break;
+      case 'kickForRound': {
+        const seat = this.seatOf(intent.playerId);
+        changed = isHost && seat !== null && this.input({ kind: 'kickForRound', seat });
+        break;
+      }
+      case 'assignSeat':
+        changed = isHost && this.assignSeat(intent.seatOf, intent.to);
         break;
     }
     if (changed) this.broadcast();
@@ -242,12 +289,76 @@ export class HostSession implements Session {
     return true;
   }
 
+  /** Removes an away member. Seated players of a running game are kicked for the round instead. */
   private removePlayer(playerId: string): boolean {
     const i = this.members.findIndex((m) => m.playerId === playerId);
-    if (i <= 0 || this.members[i]!.peerId !== null) return false;
+    if (i <= 0 || this.members[i]!.peerId !== null || this.seatOf(playerId) !== null) return false;
     const [gone] = this.members.splice(i, 1);
     this.system(`${gone!.name} was removed.`);
     return true;
+  }
+
+  /** Starts a game, or a rematch with the current lobby. */
+  private start(): boolean {
+    const lp = this.loadedPack();
+    const selection = this.selection();
+    const seated = this.seated(selection);
+    if (!lp || !selection?.pack || this.startProblem(selection, seated)) return false;
+    const state = startGame(selection.pack, {
+      packId: lp.pack.id,
+      players: seated.map((m) => ({ playerId: m.playerId, name: m.name, color: m.color })),
+      options: this.options,
+      seed: this.seed(),
+    });
+    this.game = { packId: lp.pack.id, addons: [...this.addons], pack: selection.pack, state };
+    this.system(`The game begins: ${selection.pack.name}.`);
+    return true;
+  }
+
+  private endGame(): boolean {
+    if (!this.game) return false;
+    this.game = null;
+    this.system('Back to the lobby.');
+    return true;
+  }
+
+  /** Runs an engine input. Refused inputs change nothing. */
+  private input(input: Input): boolean {
+    if (!this.game) return false;
+    const result = apply(this.game.pack, this.game.state, input);
+    if (result.error) {
+      if (result.error.startsWith('Engine error')) this.system(result.error);
+      return false;
+    }
+    this.game.state = result.state;
+    return true;
+  }
+
+  /** Gives the seat of an away player to a member who is not seated (someone switched device). */
+  private assignSeat(seatOfId: string, toId: string): boolean {
+    const game = this.game;
+    const seat = this.seatOf(seatOfId);
+    const old = this.members.find((m) => m.playerId === seatOfId);
+    const next = this.members.find((m) => m.playerId === toId);
+    if (!game || seat === null || !old || !next || old.peerId !== null || this.seatOf(toId) !== null) return false;
+    const player = game.state.players[seat]!;
+    Object.assign(player, { playerId: next.playerId, name: next.name, color: next.color });
+    // The new device takes the old member's place in the list, so the seat order stays.
+    const i = this.members.indexOf(old);
+    this.members.splice(this.members.indexOf(next), 1);
+    this.members.splice(i, 1, next);
+    this.members.push(old);
+    this.syncConnection(next);
+    this.system(`${next.name} takes over ${old.name}'s seat.`);
+    return true;
+  }
+
+  /** Tells the engine whether a seated member is connected. */
+  private syncConnection(member: Member): void {
+    const seat = this.seatOf(member.playerId);
+    if (seat === null || !this.game) return;
+    const connected = member.peerId !== null;
+    if (this.game.state.players[seat]!.connected !== connected) this.input({ kind: 'connection', seat, connected });
   }
 
   // ---------- Chat ----------
@@ -293,30 +404,63 @@ export class HostSession implements Session {
     return this.members.slice(0, max);
   }
 
+  private seatOf(playerId: string): Seat | null {
+    const seat = this.game?.state.players.findIndex((p) => p.playerId === playerId) ?? -1;
+    return seat >= 0 ? seat : null;
+  }
+
+  /** Validation errors for the current selection, cached per pack and addon set. */
+  private packProblems(): string[] {
+    const lp = this.loadedPack();
+    if (!lp) return [];
+    const key = `${lp.pack.id}|${[...this.addons].sort().join(',')}`;
+    let errors = this.validation.get(key);
+    if (!errors) {
+      errors = validateSelection(lp, this.addons);
+      this.validation.set(key, errors);
+    }
+    return errors.length ? [`This game has a problem. ${errors[0]}`] : [];
+  }
+
+  private startProblem(selection: Selection | null, seated: Member[]): string | null {
+    return startBlocked(
+      selection,
+      seated.map((m) => ({ playerId: m.playerId, name: m.name, connected: m.peerId !== null })),
+      this.packProblems(),
+    );
+  }
+
+  /** Why the host cannot start the next round right now, or null. */
+  private nextRoundProblem(state: GameState): string | null {
+    if (state.phase !== 'roundOver') return null;
+    const pool = state.deciding ?? state.players.map((p) => p.seat);
+    const away = pool.filter((seat) => !state.players[seat]!.connected).map((seat) => state.players[seat]!.name);
+    if ((state.deciding && away.length) || pool.length - away.length < 2) return `Waiting for ${away.join(' and ')} to come back.`;
+    return null;
+  }
+
   private lobbyView(): LobbyView {
+    const game = this.game;
     const selection = this.selection();
-    const seated = new Set(this.seated(selection));
+    const seated = new Set(game ? game.state.players.map((p) => p.playerId) : this.seated(selection).map((m) => m.playerId));
     return {
       code: this.code,
       hostPlayerId: this.playerId,
-      phase: 'lobby',
+      phase: game ? 'playing' : 'lobby',
       players: this.members.map((m) => ({
         playerId: m.playerId,
         name: m.name,
         color: m.color,
         connected: m.peerId !== null,
         isHost: m === this.members[0],
-        role: seated.has(m) ? 'player' : 'spectator',
+        role: seated.has(m.playerId) ? 'player' : 'spectator',
         packReady: true,
       })),
-      packId: this.packId,
-      addons: [...this.addons],
-      options: { ...this.options },
+      packId: game?.packId ?? this.packId,
+      addons: [...(game?.addons ?? this.addons)],
+      options: game ? { ...game.state.options } : { ...this.options },
       customPack: null,
-      startBlocked: startBlocked(
-        selection,
-        [...seated].map((m) => ({ playerId: m.playerId, name: m.name, connected: m.peerId !== null })),
-      ),
+      startBlocked: game ? this.nextRoundProblem(game.state) : this.startProblem(selection, this.seated(selection)),
     };
   }
 
@@ -325,7 +469,8 @@ export class HostSession implements Session {
     this.seq++;
     const lobby = this.lobbyView();
     for (const m of this.members) {
-      const view: View = { seq: this.seq, hostPlayerId: this.playerId, lobby, game: null };
+      const game = this.game ? viewFor(this.game.state, this.seatOf(m.playerId)) : null;
+      const view: View = { seq: this.seq, hostPlayerId: this.playerId, lobby, game };
       if (m === this.members[0]) this.ownView = view;
       else if (m.peerId) void this.out.view.send(view, m.peerId);
     }
@@ -345,6 +490,7 @@ export class HostSession implements Session {
 
   private save(): void {
     if (!this.store) return;
+    const game = this.game;
     const snapshot: Snapshot = {
       v: 1,
       seq: this.seq,
@@ -354,6 +500,7 @@ export class HostSession implements Session {
       addons: this.addons,
       options: this.options,
       chat: this.chat,
+      game: game ? { packId: game.packId, addons: game.addons, state: game.state } : null,
     };
     this.store.save(JSON.stringify(snapshot));
   }
@@ -363,6 +510,19 @@ export class HostSession implements Session {
       const raw = this.store?.load();
       const snap = raw ? (JSON.parse(raw) as Snapshot) : null;
       return snap && snap.v === 1 && Array.isArray(snap.members) && Array.isArray(snap.chat) ? snap : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Rebuilds a saved game. Everyone but the host counts as away until they say hello. */
+  private resumeGame(saved: Snapshot['game'] | undefined): Game | null {
+    const lp = saved && this.packs.find((p) => p.pack.id === saved.packId);
+    if (!saved || !lp) return null;
+    try {
+      const game: Game = { ...saved, pack: mergeAddons(lp.pack, lp.addons, saved.addons) };
+      for (const p of game.state.players) p.connected = p.playerId === this.playerId;
+      return game;
     } catch {
       return null;
     }
@@ -392,6 +552,15 @@ export function parseHello(data: unknown): Hello | null {
   return { protocol, playerId, name: name.slice(0, 200), color, cachedPacks: packs };
 }
 
+/** Answers are checked against the open prompt by the engine. Here only their size is capped. */
+const smallJson = (v: unknown) => {
+  try {
+    return JSON.stringify(v).length <= 2000;
+  } catch {
+    return false;
+  }
+};
+
 export function parseIntent(data: unknown): Intent | null {
   if (!isObj(data) || typeof data.kind !== 'string') return null;
   const d = data;
@@ -411,7 +580,7 @@ export function parseIntent(data: unknown): Intent | null {
     case 'endGame':
       return { kind: d.kind };
     case 'answer':
-      return isStr(d.promptId) ? { kind: 'answer', promptId: d.promptId, value: d.value } : null;
+      return isStr(d.promptId) && smallJson(d.value) ? { kind: 'answer', promptId: d.promptId, value: d.value } : null;
     case 'kickForRound':
     case 'removePlayer':
       return isStr(d.playerId, 64) ? { kind: d.kind, playerId: d.playerId } : null;

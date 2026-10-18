@@ -13,43 +13,51 @@ Each milestone ends with something you can try in the browser. Check items off a
 - [x] Join codes with tests
 - [x] Addon merging and requires/conflicts checks with tests (pulled forward from M2)
 
-## M1: Connect
+## M1: Connect (done)
 
 Goal: two tabs (and then two machines) see each other in the same lobby and can chat.
 
-- [ ] `src/net/local.ts`: Transport over `BroadcastChannel`, enabled with `?transport=local`.
+- [x] `src/net/local.ts`: Transport over `BroadcastChannel`, enabled with `?transport=local`.
   Lets several tabs talk without internet. Use it for all early testing.
-- [ ] `src/net/trystero.ts`: Transport over Trystero. `joinRoom({ appId, password: code }, code)`,
+- [x] `src/net/trystero.ts`: Transport over Trystero. `joinRoom({ appId, password: code }, code)`,
   one action per protocol message, `onPeerJoin` and `onPeerLeave`.
-- [ ] `src/session/host.ts`: seats keyed by `playerId`, lobby settings, chat history (500),
+- [x] `src/session/host.ts`: seats keyed by `playerId`, lobby settings, chat history (500),
   sends each player a `view` after every change, persists to localStorage.
-- [ ] `src/session/client.ts`: sends `hello`, locks onto the host (see DESIGN.md), keeps the
+- [x] `src/session/client.ts`: sends `hello`, locks onto the host (see DESIGN.md), keeps the
   latest view by `seq`, sends intents.
-- [ ] Lobby screen reads from the session instead of local state.
-- [ ] Join by link and by code. Copy-link button.
-- [ ] Reload as host resumes the lobby. Reload as player gets the seat back.
+- [x] Lobby screen reads from the session instead of local state.
+- [x] Join by link and by code. Copy-link button.
+- [x] Reload as host resumes the lobby. Reload as player gets the seat back.
 
 How: write the session against the `Transport` interface first and test it with two
 in-memory transports in Vitest, then plug in BroadcastChannel and Trystero.
 
-## M2: Engine and Power Hungry Pets rules
+Not yet tried: a real game over Trystero between two machines (the sandbox this was built in
+has no route to Nostr relays). Local mode is tested in a real browser.
+
+## M2: Engine and Power Hungry Pets rules (done)
 
 Goal: a full game of Power Hungry Pets runs headless in a test.
 
 - [x] `src/packs/merge.ts`: apply addons in pack order. Unit tests for add, remove, modify,
   rules deep merge, requires and conflicts.
-- [ ] `src/packs/validate.ts`: the checks listed in PACK_FORMAT.md, with readable paths.
-- [ ] `src/engine/rng.ts`: small seeded PRNG (sfc32 or xoshiro128**), state stored as numbers.
-- [ ] `src/engine/interpreter.ts`: frames, prompts, effect abort, round-end checks after every op.
-- [ ] `src/engine/ops/*.ts`: one file per op group. Only the ops marked M2.
-- [ ] Showdown with `showdownValue`, tie-break option, `stillTied: allWin`.
-- [ ] Scoring: tokens, target fixed at start, deciding round.
-- [ ] `src/engine/view.ts`: `viewFor(state, seat)` with knowledge tracking.
-- [ ] `src/engine/sim.test.ts`: thousands of seeded random games. Invariants: card count
+- [x] `src/packs/validate.ts`: the checks listed in PACK_FORMAT.md, with readable paths.
+- [x] `src/engine/rng.ts`: small seeded PRNG (sfc32 or xoshiro128**), state stored as numbers.
+- [x] `src/engine/interpreter.ts`: frames, prompts, effect abort, round-end checks after every op.
+- [x] `src/engine/ops/*.ts`: one file per op group. Only the ops marked M2.
+- [x] Showdown with `showdownValue`, tie-break option, `stillTied: allWin`.
+- [x] Scoring: tokens, target fixed at start, deciding round.
+- [x] `src/engine/view.ts`: `viewFor(state, seat)` with knowledge tracking.
+- [x] `src/engine/sim.test.ts`: thousands of seeded random games. Invariants: card count
   constant, no card in two zones, every game ends, no view leaks a hidden card.
 
 How: write the op unit tests from the card texts in `docs/rules/power-hungry-pets.md`, one
 test per card at least. Build the simulation early, it finds most bugs.
+
+Done as `src/engine/rules.test.ts` (card by card) and `sim.test.ts` / `sim-litter.test.ts`
+(750 random games per `npm test`, with kicks and dropped connections; `SIM_GAMES=5000 npm test`
+for a deeper run). The host session runs the engine too: start, answers, next round, rematch,
+back to lobby, kick for the round, hand a seat to a new device, resume mid-prompt after reload.
 
 ## M3: Table UI and art
 

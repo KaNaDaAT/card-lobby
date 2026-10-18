@@ -169,6 +169,9 @@ start of the owner's turn.
 - `viewFor(seat)` includes a card's identity only when the zone is public, the seat owns an
   `owner` zone, or the seat is in that card's `knownBy`.
 - Hidden zones are sent as a count plus the cards this seat knows, with their positions.
+- Spectators see a hidden card only when every player knows it (it was revealed to all).
+- At round end, final hands and the set-aside cards are shown to everyone. The draw pile stays
+  hidden.
 - Peeking adds the viewer to `knownBy`. Moving a card inside a hidden zone keeps knowledge
   (Mouse Trapper knows where it put the card).
 - Shuffling a zone clears `knownBy` for its cards and gives them new uids, so nobody can track
