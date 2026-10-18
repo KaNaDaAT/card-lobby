@@ -59,26 +59,27 @@ Done as `src/engine/rules.test.ts` (card by card) and `sim.test.ts` / `sim-litte
 for a deeper run). The host session runs the engine too: start, answers, next round, rematch,
 back to lobby, kick for the round, hand a seat to a new device, resume mid-prompt after reload.
 
-## M3: Table UI and art
+## M3: Table UI and art (done)
 
 Goal: play a full game with friends in tabs.
 
-- [ ] Table screen from the game view: opponents, deck count, set-aside, played rows, hand.
-- [ ] Prompt bar for each prompt kind: choose player, guess, position, confirm, play.
-- [ ] Log panel next to chat. Private entries styled differently.
-- [ ] Round end and game end overlays. Rematch.
-- [ ] CSS animations: deal, play, flip, swap. Respect `prefers-reduced-motion`.
+- [x] Table screen from the game view: opponents, deck count, set-aside, played rows, hand.
+- [x] Prompt bar for each prompt kind: choose player, guess, position, confirm, play.
+- [x] Log panel next to chat. Private entries styled differently.
+- [x] Round end and game end overlays. Rematch.
+- [x] CSS animations: deal, play, flip, swap. Respect `prefers-reduced-motion`. (One arrival
+  animation for every card that appears, changes hands or is revealed.)
 - [x] Card art: one simple SVG per card, in the style of `art/cover.svg`, 500 x 700.
-- [ ] Larger card view on hover or tap, with the rules text.
-- [ ] Warn before playing the King Cat.
+- [x] Larger card view on hover or tap, with the rules text.
+- [x] Warn before playing the King Cat. (Any card whose `onDiscard` knocks out its holder.)
 
-## M4: Disconnects and resume
+## M4: Disconnects and resume (done)
 
-- [ ] Pause when the active player is away. "Waiting for X" banner.
-- [ ] Host action: kick for the round.
-- [ ] Sitting out a round when away at round start.
-- [ ] Host reload mid-game resumes from saved state, including mid-prompt.
-- [ ] Assign an empty seat to a new device.
+- [x] Pause when the active player is away. "Waiting for X" banner.
+- [x] Host action: kick for the round.
+- [x] Sitting out a round when away at round start.
+- [x] Host reload mid-game resumes from saved state, including mid-prompt.
+- [x] Assign an empty seat to a new device.
 
 ## M5: Custom packs
 
@@ -94,7 +95,7 @@ Goal: play a full game with friends in tabs.
 - [ ] Phone layout: chat and log become drawers.
 - [ ] TURN config (Trystero `turnConfig`).
 - [ ] Deploy `dist/` to GitHub Pages or Cloudflare Pages.
-- [ ] Protocol version check with an "update your page" view.
+- [x] Protocol version check with an "update your page" view.
 
 ## M7: Exploding Kittens (future work)
 

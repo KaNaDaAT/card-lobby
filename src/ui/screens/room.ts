@@ -15,6 +15,7 @@ import { avatar, brandMark, pill } from '../components/bits';
 import { h, replace, type Child } from '../dom';
 import { roomLink, type Screen } from '../router';
 import { lobbyMain, playersPanel, type RoomCtx } from './lobby';
+import { logPanel, newTableMemo, tableMain, type TableMemo } from './table';
 
 const DEFAULT_ACCENT = '#9d85ff';
 
@@ -35,6 +36,7 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
   let ctx: RoomCtx | null = null;
   let disposed = false;
   let drawnChat: ChatMessage[] | null = null;
+  let memo: TableMemo = newTableMemo();
 
   const banner = h('div', { class: 'banner-slot' });
   const mainRegion = h('section', { class: 'col-main' });
@@ -135,10 +137,29 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
       );
       replace(sideRegion);
     } else {
-      replace(mainRegion, mainContent(ctx, view));
-      replace(sideRegion, playersPanel(ctx, view.lobby));
+      // Views come from the host. One that cannot be drawn must not freeze the page.
+      try {
+        drawView(ctx, view);
+      } catch (err) {
+        console.error(err);
+        replace(mainRegion, waitingPanel('Could not draw this view', String(err), false));
+      }
     }
     if (state.chat !== drawnChat) drawChat(ctx, state, view);
+  };
+
+  const drawView = (c: RoomCtx, view: View) => {
+    if (view.game && view.lobby.phase === 'playing') {
+      replace(mainRegion, tableMain(c, view.lobby, view.game, memo), playersPanel(c, view.lobby, view.game));
+      const log = logPanel(view.game);
+      replace(sideRegion, log);
+      const lines = log.querySelector('.log');
+      if (lines) lines.scrollTop = lines.scrollHeight;
+    } else {
+      memo = newTableMemo();
+      replace(mainRegion, lobbyMain(c, view.lobby));
+      replace(sideRegion, playersPanel(c, view.lobby));
+    }
   };
 
   const drawChat = (c: RoomCtx, state: SessionState, view: View | null) => {
@@ -180,7 +201,7 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
             store: { load: () => loadRoomSnapshot(code), save: (data) => saveRoomSnapshot(code, data) },
           })
         : new ClientSession({ code, me, transport });
-      ctx = { session, me, packs };
+      ctx = { session, me, packs, redraw: draw };
       session.subscribe(draw);
       draw();
     } catch (err) {
@@ -193,11 +214,6 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
     ctx?.session.leave();
   };
 };
-
-function mainContent(ctx: RoomCtx, view: View): Child[] {
-  if (view.lobby.phase === 'lobby' || !view.game) return lobbyMain(ctx, view.lobby);
-  return [waitingPanel('Game in progress', 'The table arrives with milestone 3.', false)];
-}
 
 function statusBanner(state: SessionState): Child {
   if (state.status === 'hostAway') {

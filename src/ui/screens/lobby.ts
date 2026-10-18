@@ -2,6 +2,7 @@
  * The lobby, drawn from the latest view. The host gets the gallery and live controls, everyone
  * else sees the same game, addons and options read-only.
  */
+import type { GameView } from '../../engine/types';
 import type { Identity } from '../../identity';
 import type { LobbyView } from '../../net/protocol';
 import { resolveCount } from '../../packs/count';
@@ -17,6 +18,8 @@ export interface RoomCtx {
   session: Session;
   me: Identity;
   packs: LoadedPack[];
+  /** Redraws the room, for changes to local state that no view brings. */
+  redraw(): void;
 }
 
 export function lobbyMain(ctx: RoomCtx, lobby: LobbyView): Child[] {
@@ -237,11 +240,43 @@ function optionControl(
   }
 }
 
-export function playersPanel(ctx: RoomCtx, lobby: LobbyView): HTMLElement {
+export function playersPanel(ctx: RoomCtx, lobby: LobbyView, game: GameView | null = null): HTMLElement {
   const lp = ctx.packs.find((p) => p.pack.id === lobby.packId);
   const max = lp ? (mergeSelection(lp, lobby.addons).pack ?? lp.pack).players.max : undefined;
-  const rows = lobby.players.map((p) =>
-    h(
+  const isHost = ctx.session.isHost;
+  // Watchers who could take over an away player's seat.
+  const watchers = lobby.players.filter((p) => p.role === 'spectator' && p.connected);
+  const rows = lobby.players.map((p) => {
+    const seat = game?.players.find((s) => s.playerId === p.playerId);
+    const button = (label: string, title: string, onclick: () => void) =>
+      h('button', { type: 'button', class: 'btn btn-ghost btn-xs', title, onclick }, label);
+    let actions: Child = null;
+    if (isHost && !p.isHost) {
+      if (!game && !p.connected) {
+        actions = button('Remove', `Remove ${p.name} from the lobby`, () => ctx.session.act({ kind: 'removePlayer', playerId: p.playerId }));
+      } else if (game && seat?.round === 'in' && game.phase === 'round') {
+        actions = button('Take out', `Take ${p.name} out of this round. They keep their seat and tokens.`, () =>
+          ctx.session.act({ kind: 'kickForRound', playerId: p.playerId }),
+        );
+      }
+    }
+    const handOver =
+      isHost && game && seat && !p.connected && watchers.length
+        ? h(
+            'select',
+            {
+              class: 'input input-xs',
+              'aria-label': `Give ${p.name}'s seat to`,
+              onchange: (e: Event) => {
+                const to = (e.target as HTMLSelectElement).value;
+                if (to) ctx.session.act({ kind: 'assignSeat', seatOf: p.playerId, to });
+              },
+            },
+            h('option', { value: '' }, 'Give seat to...'),
+            watchers.map((w) => h('option', { value: w.playerId }, w.name)),
+          )
+        : null;
+    return h(
       'li',
       { class: `player${p.connected ? '' : ' is-away'}` },
       avatar(p.name, p.color),
@@ -249,26 +284,16 @@ export function playersPanel(ctx: RoomCtx, lobby: LobbyView): HTMLElement {
       p.isHost ? h('span', { class: 'badge' }, 'Host') : null,
       p.playerId === ctx.me.playerId ? h('span', { class: 'badge badge-soft' }, 'You') : null,
       p.role === 'spectator' ? h('span', { class: 'badge badge-soft' }, 'Watching') : null,
-      ctx.session.isHost && !p.connected && lobby.phase === 'lobby'
-        ? h(
-            'button',
-            {
-              type: 'button',
-              class: 'btn btn-ghost btn-xs',
-              title: `Remove ${p.name} from the lobby`,
-              onclick: () => ctx.session.act({ kind: 'removePlayer', playerId: p.playerId }),
-            },
-            'Remove',
-          )
-        : null,
+      actions,
+      handOver,
       h('span', { class: `conn${p.connected ? ' on' : ''}`, title: p.connected ? 'Connected' : 'Away' }),
-    ),
-  );
+    );
+  });
   return h(
     'section',
     { class: 'panel players' },
-    h('div', { class: 'panel-head' }, h('h2', null, 'Players'), max ? pill(`${seatedCount(lobby)} / ${max}`) : null),
+    h('div', { class: 'panel-head' }, h('h2', null, 'Players'), max && !game ? pill(`${seatedCount(lobby)} / ${max}`) : null),
     h('ul', { class: 'player-list' }, rows),
-    h('p', { class: 'muted small' }, 'Share the link or code to invite friends.'),
+    h('p', { class: 'muted small' }, game ? 'People who join now watch until the next game.' : 'Share the link or code to invite friends.'),
   );
 }

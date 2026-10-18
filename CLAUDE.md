@@ -11,7 +11,7 @@ Read [docs/DESIGN.md](docs/DESIGN.md) before changing architecture, and
 
 - `npm run dev` starts Vite on http://localhost:5173
 - `npm run check` type-checks
-- `npm test` runs Vitest once
+- `npm test` runs Vitest once, including 750 simulated games (`SIM_GAMES=5000 npm test` for more)
 - `npm run build` type-checks and builds static files into `dist/`
 
 ## Stack rules
@@ -44,11 +44,16 @@ network, no clock, seeded RNG, plain-JSON state. Only the host runs it.
 
 ## Layout
 
-- `src/net` join codes, protocol types, `Transport` interface. Trystero and BroadcastChannel
-  transports come in milestone 1
-- `src/session` host and client sessions (milestone 1, not created yet)
-- `src/engine` state and input types so far. Interpreter, ops and views come in milestone 2
-- `src/packs` pack types, loading, counts, addon merging
+- `src/net` join codes, protocol types, `Transport` interface, and three transports: Trystero
+  (`trystero.ts`, loaded on demand), BroadcastChannel (`local.ts`, `?transport=local`) and an
+  in-memory network for tests (`memory.ts`)
+- `src/session` `HostSession` (members, lobby, chat, runs the engine, saves a snapshot) and
+  `ClientSession` (hello, host lock, latest view). `lobby.ts` holds lobby rules both share
+- `src/engine` the pure rules engine: `index.ts` is the API (`startGame`, `apply`, `viewFor`,
+  `checkSetup`), `interpreter.ts` runs frames, `ops/` is the fixed op list, `round.ts` rounds,
+  turns, showdown and scoring, `view.ts` per-seat views, `testing.ts` and `simulate.ts` test
+  harnesses
+- `src/packs` pack types, loading, counts, addon merging, validation
 - `src/ui` DOM helper, router, components, screens
 - `src/identity.ts` local player id, name, color, host marker
 - `src/styles` design tokens (light and dark) and app styles
@@ -56,5 +61,7 @@ network, no clock, seeded RNG, plain-JSON state. Only the host runs it.
 
 ## Testing locally
 
-Open several tabs. `?as=2` (or any slot name) gives a tab its own player identity, so one
-browser can act as several players. Tests sit next to the code as `*.test.ts`.
+Open several tabs with `?transport=local` (no network needed). `?as=2` (or any slot name)
+gives a tab its own player identity, so one browser can act as several players. Tests sit next
+to the code as `*.test.ts`. Engine rules tests use `Table` from `src/engine/testing.ts`, which
+rigs hands and the deck by swapping card identities.
