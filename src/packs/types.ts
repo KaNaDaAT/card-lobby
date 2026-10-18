@@ -44,6 +44,8 @@ export interface CardDef {
   id: string;
   name: string;
   value?: number;
+  /** Shown instead of the value, like "∞" for a card whose value is 100. */
+  valueLabel?: string;
   count: Count;
   text: string;
   image?: string;
@@ -51,7 +53,25 @@ export interface CardDef {
   onPlay?: Op[];
   onDiscard?: Op[];
   onDraw?: Op[];
+  /** Runs when the card is played as a reaction while another play's window is open (Nope). */
+  onReact?: Op[];
+  /** Only playable as part of a combo, like the cat cards of Exploding Kittens. */
+  comboOnly?: boolean;
   showdownValue?: ValueRule[];
+}
+
+/** How a card's value is printed: its label if it has one, like "∞". */
+export function valueText(card: Pick<CardDef, 'value' | 'valueLabel'>): string {
+  return card.valueLabel ?? String(card.value ?? '');
+}
+
+/** A multi-card play. Its ops run instead of the cards' own onPlay. */
+export interface ComboDef {
+  name: string;
+  size: number;
+  /** `same`: every card has the same id. `distinct`: every card is different. */
+  match: 'same' | 'distinct';
+  ops: Op[];
 }
 
 export interface ValueRule {
@@ -74,15 +94,23 @@ export type OptionValue = string | number | boolean;
 export type Visibility = 'public' | 'owner' | 'hidden';
 
 export interface Rules {
-  zones: Record<string, { visibility: 'public' | 'hidden' }>;
-  playerZones: Record<string, { visibility: 'public' | 'owner' }>;
+  /** `label` names the zone in logs and on the table, like "the draw pile". */
+  zones: Record<string, { visibility: 'public' | 'hidden'; label?: string }>;
+  playerZones: Record<string, { visibility: 'public' | 'owner'; label?: string }>;
   statuses?: Record<string, { label: string; untargetable?: boolean }>;
+  /** Switches for the whole round, set by the `flag` op and shown on the table. Off at round start. */
+  flags?: Record<string, { label: string; text?: string }>;
   roundSetup: Op[];
   turn: Op[];
   roundEnd?: { lastStanding?: boolean };
+  combos?: ComboDef[];
+  /** How long a reaction window stays open, for packs with `onReact` cards. */
+  reactions?: { seconds: number | OptionRef };
   showdown?: {
     tieBreak?: 'highestPlayed' | 'sumPlayed' | 'none' | OptionRef;
     stillTied?: 'allWin';
+    /** When this holds at the showdown, the lowest card wins instead. */
+    lowestWins?: Condition;
   };
   scoring: {
     roundWin: number;
@@ -111,7 +139,10 @@ export type Condition =
   | { is: string }
   | { in: string }
   | { handHasValue: [string, string | number] }
+  | { handHas: [string, string] }
   | { anyHandHas: string }
+  | { flag: string }
+  | { hasStatus: [string, string] }
   | { not: Condition }
   | { all: Condition[] }
   | { any: Condition[] };
@@ -121,6 +152,9 @@ export interface Addon {
   id: string;
   name: string;
   description: string;
+  /** In an addon's own zip: the id of the game it extends, like "power-hungry-pets". */
+  extends?: string;
+  author?: string;
   image?: string;
   requires?: string[];
   conflicts?: string[];
@@ -137,10 +171,45 @@ export interface Addon {
   };
 }
 
+/** What players are shown before they accept a custom pack. */
+export interface PackOffer {
+  /** SHA-256 of the zip, hex. */
+  hash: string;
+  /** A whole game, or an addon for the game named by `extends` (its pack id). */
+  kind: 'game' | 'addon';
+  extends?: string;
+  name: string;
+  author?: string;
+  bytes: number;
+  images: number;
+}
+
 /** A pack as loaded by the app: data plus where its files live. */
 export interface LoadedPack {
+  /** How the lobby names the pack: its id when built in, `custom:<hash>` when uploaded. */
+  key: string;
   pack: Pack;
   addons: Addon[];
   /** Turns a path from the pack files into a URL the page can load. */
   asset(path: string): string;
+  /** Uploaded packs keep their zip, to send to other players. */
+  custom?: { bytes: Uint8Array; offer: PackOffer };
+  /** Addons that came in their own zips, at the end of `addons`. */
+  uploads?: LoadedAddon[];
+}
+
+/**
+ * An addon uploaded in its own zip. Its image paths start with `prefix`, so they cannot clash
+ * with the game's own files once the two are put together.
+ */
+export interface LoadedAddon {
+  /** `custom-addon:<hash>`. */
+  key: string;
+  /** The pack id of the game it extends. */
+  gameId: string;
+  addon: Addon;
+  prefix: string;
+  /** Turns one of the addon's (prefixed) image paths into a URL. */
+  asset(path: string): string;
+  custom: { bytes: Uint8Array; offer: PackOffer };
 }

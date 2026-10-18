@@ -56,8 +56,10 @@
   - The data channels themselves are always DTLS encrypted, end to end.
 - Tradeoff: the code is also the key. 40 bits is fine against guessing by strangers. It is not
   meant to stop a determined attacker who runs a relay. Acceptable for friends.
-- TURN: some networks block direct connections. Add a TURN server via Trystero's `turnConfig`
-  (milestone 6). One free account is enough for a friend group.
+- TURN: some networks block direct connections. Set `VITE_TURN_URLS` (and username and
+  credential) at build time and they go into Trystero's `turnConfig`. `VITE_NOSTR_RELAYS`
+  replaces the default relays. See `.env.example`. One free TURN account is enough for a friend
+  group. These values end up in the public JavaScript.
 
 ## Identity, host lock and reconnects
 
@@ -85,9 +87,9 @@ Trystero actions. Payload types live in `src/net/protocol.ts`.
 | `say` | client to host | chat text, at most 500 characters |
 | `chat` | host to client | chat messages (history on join, then new ones) |
 | `intent` | client to host | a lobby or game intent |
-| `packOffer` | host to client | hash, name, author, bytes, image count |
-| `packReply` | client to host | hash, accept or decline |
-| `packData` | host to client | zip bytes, metadata `{ hash }` |
+| `packOffer` | host to client | one custom file: hash, `game` or `addon` (with the game it extends), name, author, bytes, image count |
+| `packReply` | client to host | hash, accept or decline, `cached` once the pack is loaded, error if it did not check out |
+| `packData` | host to client | the zip bytes of the file the client asked for. The client checks them against that offer's hash |
 
 A client with a different protocol version gets a view that says "update your page" and
 nothing else.
@@ -119,6 +121,7 @@ Plain JSON, defined in `src/engine/types.ts`.
 - `program`: the interpreter's stack of frames.
 - `prompt`: the one question the game is waiting on, or null.
 - `stack`: plays waiting to resolve (reaction windows, empty for Pets).
+- `flags`: round flags that are on, like `upsideDown`. Public, cleared when a round starts.
 - `rng`: PRNG state. `log`: entries with visibility.
 
 ### Execution
@@ -136,13 +139,18 @@ Plain JSON, defined in `src/engine/types.ts`.
 
 ### Plays and reactions
 
-- A play moves one or more cards to `played:<seat>`, pushes it onto `stack`, opens a reaction
-  window, then resolves.
+- A play moves one or more cards to `played:<seat>` (or the `play` op's `to` zone), pushes it
+  onto `stack` with an end time, and the program waits. Several cards must make a combo.
 - The window has length 0 when no card in the merged deck can react. That is always the case
-  in Pets.
+  in Pets, where plays resolve at once.
 - When reactions exist (Exploding Kittens' Nope), the window always runs its full length, even
-  if nobody holds a reaction card. Closing early would tell everyone who has none. The host
-  times it and restarts it after each reaction.
+  if nobody holds a reaction card. Closing early would tell everyone who has none.
+- Anyone still in may send a `react` input with a card that has `onReact`. Its ops run at once
+  (`cancel` flips whether the play resolves, so a Nope on a Nope brings it back), and the
+  window restarts.
+- The engine has no clock. The host passes its clock with inputs (`now`), sets a timer for the
+  window's end and sends a `timeout` input then. The play resolves, or does nothing if it ends
+  canceled. Views carry the time left, so clients can count down.
 
 ### Hooks
 
@@ -152,7 +160,8 @@ Cards can define op lists for these events:
 |---|---|
 | `onPlay` | The card is played as an action |
 | `onDiscard` | The card lands face up in front of a player by playing it or being forced to. Not when revealed by elimination |
-| `onDraw` | The card is drawn (future, Exploding Kittens) |
+| `onDraw` | The card is drawn (the Exploding Kitten) |
+| `onReact` | The card is played as a reaction in another play's window (Nope) |
 | `whileHeld` | Passive effect while in hand (future) |
 | `onTurnStart`, `onTurnEnd` | Around the holder's turn (future) |
 | `showdownValue` | Value rules used only at round end |
@@ -169,6 +178,9 @@ start of the owner's turn.
 - `viewFor(seat)` includes a card's identity only when the zone is public, the seat owns an
   `owner` zone, or the seat is in that card's `knownBy`.
 - Hidden zones are sent as a count plus the cards this seat knows, with their positions.
+- Spectators see a hidden card only when every player knows it (it was revealed to all).
+- At round end, final hands and the set-aside cards are shown to everyone. The draw pile stays
+  hidden.
 - Peeking adds the viewer to `knownBy`. Moving a card inside a hidden zone keeps knowledge
   (Mouse Trapper knows where it put the card).
 - Shuffling a zone clears `knownBy` for its cards and gives them new uids, so nobody can track
@@ -200,21 +212,45 @@ goes to all, "Tom holds the Battle Bunny" goes to Mia only.
 
 ## Custom packs
 
-1. The host picks a `.zip` (pack.json, addons, images) in the lobby.
-2. The host validates it, computes its SHA-256, and caches it in IndexedDB.
-3. The host sends `packOffer` to each player. Players who already have that hash cached accept
-   without asking.
-4. Everyone else sees a consent card: pack name, author, size, image count, and "Only accept
-   packs from people you trust. A pack can contain any images and text."
-5. Accept: the host sends `packData`. The client checks the hash, validates, caches, and shows
-   progress via Trystero's receive progress.
-6. Decline: that player is a spectator for this game.
+A zip is one of two things:
+
+- **A game**: `pack.json` (with its own addons, if any) and images. It joins the gallery.
+- **An addon** for a game the lobby has: `addon.json` with `extends` (the game's pack id) and
+  its images. It joins that game's addons, after the game's own, in upload order. Its image
+  paths are moved under `uploads/<hash>/`, so they cannot clash with the game's files.
+
+1. The host picks a `.zip` in the lobby's gallery. `pack.json` or `addon.json` sits at the root
+   of the zip or inside one top folder.
+2. The host validates it (zip limits, file types, the pack and each addon with what it
+   requires; for an addon zip, how it fits its game), computes its SHA-256, and caches it in
+   IndexedDB. Cached games and addons come back in that browser next time. Each `?as=` slot has
+   its own cache, like a separate device. An uploaded game is picked, an uploaded addon is
+   turned on.
+3. The lobby lists the custom files it uses: the game if it was uploaded, then each uploaded
+   addon that is on. The host sends a `packOffer` for each to every player, and again whenever
+   one reconnects or an uploaded addon is turned on. Players who have a hash cached load it
+   and reply `cached` without being asked.
+4. Everyone else sees one consent card for all of them: each file's name, author, size, image
+   count, and "Only accept packs from people you trust. A pack can contain any images and
+   text."
+5. Accept: the client asks for the files one at a time; the host sends each as `packData`, at
+   most three times per file and player. The client checks the size against the offer, the
+   SHA-256, unzips and validates, caches, and replies `cached`. Progress comes from Trystero's
+   receive progress. A player is ready when they have every file. Start waits until every
+   seated player is ready.
+6. Decline: that player watches this game. The consent card stays, so they can change their
+   mind, also during the game.
 
 Safety rules:
 
 - Packs are data only. There is no way to ship code in a pack.
-- Limits: 25 MB per zip, 2 MB per image. Image types: png, jpg, webp, svg. Trystero's
-  `onReceive` declines anything bigger before the transfer starts.
+- Limits: 25 MB per zip, 2 MB per image, 1 MB per JSON file, 500 files, 80 MB unpacked. Image
+  types: png, jpg, webp, svg. Files zip tools add (`__MACOSX`, `.DS_Store`) are skipped, any
+  other file type rejects the pack. An entry that inflates past its declared size is stopped
+  while inflating.
+- Every action has a size cap. `packData` is only taken from the host, only while this page
+  is downloading a file it asked for, and no bigger than that file's offer. Trystero's `onReceive` declines anything else
+  before the transfer starts.
 - Images are shown only via `<img src="blob:...">`. An SVG loaded that way cannot run scripts.
 - All pack text is set as text, never parsed as HTML.
 - A Content-Security-Policy in `index.html` allows scripts only from the site itself, so even
@@ -226,9 +262,20 @@ Safety rules:
 1. **Home**: name and color, Create lobby, Join with code.
 2. **Lobby**: header with code and copy-link button, game gallery, selected game with addons
    and options, players, chat, Start.
-3. **Table**: opponents along the top, deck and set-aside in the middle, your hand at the
-   bottom, played cards in front of each player, a prompt bar, tokens per player, log and chat
-   in a side panel (a drawer on phones).
+3. **Table**, in two layouts each player picks for themselves (remembered per browser):
+   - **Classic**: opponents along the top, deck and set-aside in the middle, your hand at the
+     bottom, played cards in front of each player, a prompt bar, tokens per player, log and
+     chat in a side panel (a drawer on phones), players below the table.
+   - **Round table**: everyone seated around an oval in turn order, clockwise, you at the
+     bottom. The seat the game waits on glows, an arrow and a spotlight point at it, and the
+     middle says whose move it is, with the shared piles, round flags and the latest event.
+     The question and your hand sit side by side in a bar pinned to the bottom of the screen,
+     so the hand never scrolls away; when nothing is asked of you the bar says who the game
+     waits on. The oval takes the height that is left, and gets wider rather than smaller on
+     short screens. Players move into a tab beside the log. On narrow screens the seats sit
+     in a grid instead of an oval.
+   - In both, clicking a card in your hand opens it large with its text, with Play and Back.
+     Cards played in combos are picked instead, and one picked card shows its text.
 4. **Round end**: hands revealed, the winner, tokens. **Game end**: winner and rematch.
 
 ## Testing
@@ -241,14 +288,16 @@ Safety rules:
 
 ## Exploding Kittens check
 
-Power Hungry Pets never needs these, but the core leaves room for them so Exploding Kittens
-becomes new ops, not a rewrite:
+Power Hungry Pets never needs these, but the core left room for them so Exploding Kittens
+became new ops, not a rewrite (milestone 7, built):
 
 - Plays with several cards (combos), which is why a play is a list of card uids.
 - Prompts to any player, not just the active one (Favor makes the target choose).
-- Prompts with deadlines (the Nope window).
+- Reaction windows timed by the host (the Nope window).
 - The reaction stack (Nope cancels the top play, a Nope can be Noped).
-- `onDraw` (the kitten explodes when drawn), turn direction and extra turns owed (Attack).
+- `onDraw` (the kitten explodes when drawn) and extra turns owed (Attack).
 
-Milestone 7 writes the Exploding Kittens deck in the pack format as a paper test before any
-of its ops are built.
+Writing the deck in the pack format first (the paper test) showed what was missing: a play
+that repeats until the player passes, cards that only go in combos, moving a card by its id,
+secret moves (only the mover knows where the kitten went back), and dealing some cards before
+others go into the deck (`buildDeck` with `only` and `except`).

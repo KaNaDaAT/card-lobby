@@ -7,3 +7,14 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .claude/settings.local.json
+
+# Local build settings, see .env.example
+.env.local
+.env.*.local
+
+# Playwright output
+test-results/
+playwright-report/
+
+# Zipped examples, built with npm run zip-pack
+examples/**/*.zip

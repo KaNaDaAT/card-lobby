@@ -1,7 +1,8 @@
 # Card Lobby
 
 Static website where friends create or join a lobby, chat, and play card games peer to peer.
-Games and their addons are data packs (JSON plus images). First game: Power Hungry Pets.
+Games and their addons are data packs (JSON plus images). Games: Power Hungry Pets and
+Exploding Kittens.
 
 Read [docs/DESIGN.md](docs/DESIGN.md) before changing architecture, and
 [docs/PACK_FORMAT.md](docs/PACK_FORMAT.md) before touching packs or engine ops.
@@ -11,13 +12,17 @@ Read [docs/DESIGN.md](docs/DESIGN.md) before changing architecture, and
 
 - `npm run dev` starts Vite on http://localhost:5173
 - `npm run check` type-checks
-- `npm test` runs Vitest once
+- `npm test` runs Vitest once, including 1100 simulated games (`SIM_GAMES=5000 npm test` for more)
 - `npm run build` type-checks and builds static files into `dist/`
+- `npm run e2e` runs the Playwright browser tests in `e2e/` against the production build
+  (`npx playwright install chromium` once per machine)
+- `npm run zip-pack -- <folder>` zips a game or addon folder for the lobby's Custom pack tile
 
 ## Stack rules
 
 - TypeScript, HTML and CSS only. No UI framework.
-- Runtime dependencies: Trystero only. Ask before adding another.
+- Runtime dependencies: Trystero only. Ask before adding another. Dev tools: Vite, Vitest,
+  TypeScript and Playwright (pinned, it must match its browser build).
 - No server code. Everything must work as static files.
 
 ## Architecture in one paragraph
@@ -38,23 +43,43 @@ network, no clock, seeded RNG, plain-JSON state. Only the host runs it.
   including mid-effect while waiting for a prompt.
 - `viewFor(state, seat)` must never include a hidden card the seat does not know.
   Simulation tests assert this.
-- Rules decisions for Power Hungry Pets live in
-  [docs/rules/power-hungry-pets.md](docs/rules/power-hungry-pets.md). Change that file
-  together with the pack.
+- Rules decisions for each game live in `docs/rules/`:
+  [power-hungry-pets.md](docs/rules/power-hungry-pets.md) (with its three addons) and
+  [exploding-kittens.md](docs/rules/exploding-kittens.md). Change the file together with its
+  pack.
+- [docs/TUTORIAL.md](docs/TUTORIAL.md) quotes the Power Hungry Pets addons and
+  `examples/my-first-addon`. `src/packs/tutorial.test.ts` checks the quotes; keep them in step.
+- Reaction windows are timed by the host's clock only. The engine gets `now` with inputs and
+  never reads a clock itself.
 
 ## Layout
 
-- `src/net` join codes, protocol types, `Transport` interface. Trystero and BroadcastChannel
-  transports come in milestone 1
-- `src/session` host and client sessions (milestone 1, not created yet)
-- `src/engine` state and input types so far. Interpreter, ops and views come in milestone 2
-- `src/packs` pack types, loading, counts, addon merging
+- `src/net` join codes, protocol types, `Transport` interface, and three transports: Trystero
+  (`trystero.ts`, loaded on demand), BroadcastChannel (`local.ts`, `?transport=local`) and an
+  in-memory network for tests (`memory.ts`)
+- `src/session` `HostSession` (members, lobby, chat, runs the engine, saves a snapshot) and
+  `ClientSession` (hello, host lock, latest view). `lobby.ts` holds lobby rules both share
+- `src/engine` the pure rules engine: `index.ts` is the API (`startGame`, `apply`, `viewFor`,
+  `checkSetup`), `interpreter.ts` runs frames, `ops/` is the fixed op list, `round.ts` rounds,
+  turns, showdown and scoring, `view.ts` per-seat views, `testing.ts` and `simulate.ts` test
+  harnesses
+- `src/packs` pack types, loading, counts, addon merging, validation, and custom packs: `zip.ts`
+  (minimal reader), `custom.ts` (import a game or addon zip, put uploaded addons with their game,
+  blob URLs, SHA-256), `cache.ts` (IndexedDB by hash, per `?as=` slot), `loader.ts` (cache
+  first, then a checked download)
 - `src/ui` DOM helper, router, components, screens
 - `src/identity.ts` local player id, name, color, host marker
 - `src/styles` design tokens (light and dark) and app styles
+- `e2e` browser tests (`*.e2e.ts`), several local-mode tabs acting as players
+- `.github/workflows` CI on pull requests, GitHub Pages deploy on `main`
 - `public/packs` built-in packs, one folder each, listed in `public/packs/index.json`
+- `examples/my-first-addon` the tutorial's addon, to upload as a zip. A zip is a game
+  (`pack.json`) or an addon for a game the lobby has (`addon.json` with `extends`)
+- `scripts/zip-pack.mjs` zips a pack folder, no dependencies
 
 ## Testing locally
 
-Open several tabs. `?as=2` (or any slot name) gives a tab its own player identity, so one
-browser can act as several players. Tests sit next to the code as `*.test.ts`.
+Open several tabs with `?transport=local` (no network needed). `?as=2` (or any slot name)
+gives a tab its own player identity, so one browser can act as several players. Tests sit next
+to the code as `*.test.ts`. Engine rules tests use `Table` from `src/engine/testing.ts`, which
+rigs hands and the deck by swapping card identities.

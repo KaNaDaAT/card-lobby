@@ -20,9 +20,13 @@ export function navigate(route: Route): void {
   location.hash = routeHash(route);
 }
 
-/** Shareable link to a room, without dev-only query params like `?as=`. */
-export function roomLink(code: string): string {
-  return `${location.origin}${location.pathname}${routeHash({ name: 'room', code })}`;
+/**
+ * Shareable link to a room, without dev-only query params like `?as=`. Local mode keeps
+ * `?transport=local`, since a tab without it would look for the room on the network.
+ */
+export function roomLink(code: string, opts: { local?: boolean } = {}): string {
+  const query = opts.local ? '?transport=local' : '';
+  return `${location.origin}${location.pathname}${query}${routeHash({ name: 'room', code })}`;
 }
 
 export function startRouter(

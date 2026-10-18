@@ -34,6 +34,9 @@ function slot(): string {
 
 const key = (name: string) => `card-lobby:${name}${slot()}`;
 
+/** A storage name of this browser slot, for stores outside localStorage (IndexedDB). */
+export const slotName = (name: string) => key(name);
+
 function read(name: string): string | null {
   try {
     return localStorage.getItem(key(name));
@@ -84,4 +87,13 @@ export function markHosting(code: string): void {
 
 export function isHosting(code: string): boolean {
   return read(`host:${code}`) === '1';
+}
+
+/** The host's saved room (members, lobby, chat, game), so a reload resumes it. */
+export function loadRoomSnapshot(code: string): string | null {
+  return read(`room:${code}`);
+}
+
+export function saveRoomSnapshot(code: string, data: string): void {
+  write(`room:${code}`, data);
 }

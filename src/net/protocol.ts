@@ -1,8 +1,10 @@
 /** Messages between host and clients. See docs/DESIGN.md, "Protocol". */
 import type { GameView } from '../engine/types';
-import type { OptionValue } from '../packs/types';
+import type { OptionValue, PackOffer } from '../packs/types';
 
-export const PROTOCOL_VERSION = 1;
+export type { PackOffer } from '../packs/types';
+
+export const PROTOCOL_VERSION = 3;
 
 /** Trystero action names. Kept short, Trystero limits their length. */
 export const ACTION = {
@@ -18,6 +20,17 @@ export const ACTION = {
 
 export const CHAT_MAX_LENGTH = 500;
 export const CHAT_HISTORY = 500;
+
+/** Largest payload each action may carry, in bytes. Anything bigger is dropped unread. */
+export const MAX_BYTES = {
+  hello: 8 * 1024,
+  say: 8 * 1024,
+  intent: 8 * 1024,
+  packReply: 4 * 1024,
+  packOffer: 4 * 1024,
+  view: 2 * 1024 * 1024,
+  chat: 1024 * 1024,
+} as const;
 
 export interface Hello {
   protocol: number;
@@ -35,9 +48,12 @@ export interface LobbyPlayer {
   connected: boolean;
   isHost: boolean;
   role: 'player' | 'spectator';
-  /** False while a custom pack is not downloaded or was declined. */
-  packReady: boolean;
+  /** Where the player stands with the lobby's custom files (game and addons). Built-in ones are always ready. */
+  pack: PackStatus;
 }
+
+/** `failed` means the pack arrived but did not check out on the player's side. */
+export type PackStatus = 'ready' | 'offered' | 'downloading' | 'declined' | 'failed';
 
 export interface LobbyView {
   code: string;
@@ -47,7 +63,10 @@ export interface LobbyView {
   packId: string | null;
   addons: string[];
   options: Record<string, OptionValue>;
+  /** The custom game in use, when the game is not built in. */
   customPack: PackOffer | null;
+  /** Addons in use that came in their own zips, in merge order. */
+  customAddons: PackOffer[];
   /** Why Start is disabled, or null when the host can start. */
   startBlocked: string | null;
 }
@@ -70,25 +89,34 @@ export interface ChatMessage {
   at: number;
 }
 
+/** Payload of the `chat` action. `history` replaces what the client has (sent on join). */
+export interface ChatPayload {
+  messages: ChatMessage[];
+  history?: boolean;
+}
+
 export type Intent =
   | { kind: 'selectPack'; packId: string }
   | { kind: 'toggleAddon'; addonId: string; on: boolean }
   | { kind: 'setOption'; id: string; value: OptionValue }
   | { kind: 'start' }
   | { kind: 'answer'; promptId: string; value: unknown }
+  | { kind: 'react'; uid: string }
+  | { kind: 'nextRound' }
+  | { kind: 'rematch' }
+  | { kind: 'endGame' }
   | { kind: 'kickForRound'; playerId: string }
   | { kind: 'removePlayer'; playerId: string }
   | { kind: 'assignSeat'; seatOf: string; to: string };
 
-export interface PackOffer {
-  hash: string;
-  name: string;
-  author?: string;
-  bytes: number;
-  images: number;
-}
-
+/**
+ * A player's answer to a pack offer. `cached` means they have the pack loaded, from their cache
+ * or after the download. Accepting without `cached` asks the host to send it.
+ */
 export interface PackReply {
   hash: string;
   accept: boolean;
+  cached?: boolean;
+  /** Why a downloaded pack was refused. */
+  error?: string;
 }

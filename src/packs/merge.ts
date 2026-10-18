@@ -1,6 +1,13 @@
 import type { Addon, OptionDef, Pack } from './types';
 
-export class MergeError extends Error {}
+export class MergeError extends Error {
+  constructor(
+    readonly addonId: string,
+    readonly detail: string,
+  ) {
+    super(`${addonId}: ${detail}`);
+  }
+}
 
 /**
  * Applies the enabled addons to a pack, in the order the pack lists them, and returns a new
@@ -11,23 +18,22 @@ export function mergeAddons(pack: Pack, addons: Addon[], enabled: readonly strin
   const merged = structuredClone(pack);
   for (const addon of addons) {
     if (!enabled.includes(addon.id)) continue;
-    const where = (path: string) => `${addon.id}: ${path}`;
 
     if (addon.players) merged.players = { ...merged.players, ...addon.players };
 
     for (const id of addon.cards?.remove ?? []) {
       const i = merged.cards.findIndex((c) => c.id === id);
-      if (i < 0) throw new MergeError(where(`cards.remove.${id}: no card with this id`));
+      if (i < 0) throw new MergeError(addon.id, `cards.remove.${id}: no card with this id`);
       merged.cards.splice(i, 1);
     }
     for (const [id, patch] of Object.entries(addon.cards?.modify ?? {})) {
       const card = merged.cards.find((c) => c.id === id);
-      if (!card) throw new MergeError(where(`cards.modify.${id}: no card with this id`));
+      if (!card) throw new MergeError(addon.id, `cards.modify.${id}: no card with this id`);
       Object.assign(card, structuredClone(patch));
     }
     for (const card of addon.cards?.add ?? []) {
       if (merged.cards.some((c) => c.id === card.id)) {
-        throw new MergeError(where(`cards.add.${card.id}: a card with this id already exists`));
+        throw new MergeError(addon.id, `cards.add.${card.id}: a card with this id already exists`);
       }
       merged.cards.push(structuredClone(card));
     }
@@ -37,12 +43,12 @@ export function mergeAddons(pack: Pack, addons: Addon[], enabled: readonly strin
     const options = (merged.options ??= []);
     for (const [id, patch] of Object.entries(addon.options?.modify ?? {})) {
       const option = options.find((o) => o.id === id);
-      if (!option) throw new MergeError(where(`options.modify.${id}: no option with this id`));
+      if (!option) throw new MergeError(addon.id, `options.modify.${id}: no option with this id`);
       Object.assign(option, structuredClone(patch));
     }
     for (const option of addon.options?.add ?? []) {
       if (options.some((o) => o.id === option.id)) {
-        throw new MergeError(where(`options.add.${option.id}: an option with this id already exists`));
+        throw new MergeError(addon.id, `options.add.${option.id}: an option with this id already exists`);
       }
       options.push(structuredClone(option) as OptionDef);
     }

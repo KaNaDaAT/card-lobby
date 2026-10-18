@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Peer-to-peer card game lobby. Games and addons are data packs.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,12 +11,15 @@
     "preview": "vite preview",
     "check": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "zip-pack": "node scripts/zip-pack.mjs"
   },
   "dependencies": {
     "trystero": "^0.26.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.5"
