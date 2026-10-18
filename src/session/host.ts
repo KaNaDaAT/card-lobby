@@ -47,7 +47,19 @@ export interface HostOptions {
   now?: () => number;
   /** Seeds each game's PRNG. Random by default. */
   seed?: () => number;
+  /** Timers for reaction windows. The page's setTimeout by default. */
+  timers?: Timers;
 }
+
+export interface Timers {
+  set(fn: () => void, ms: number): unknown;
+  clear(handle: unknown): void;
+}
+
+const pageTimers: Timers = {
+  set: (fn, ms) => setTimeout(fn, ms),
+  clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+};
 
 interface Member {
   playerId: string;
@@ -95,6 +107,7 @@ export class HostSession implements Session {
   private readonly store: SnapshotStore | undefined;
   private readonly now: () => number;
   private readonly seed: () => number;
+  private readonly timers: Timers;
   private readonly listeners = new Set<() => void>();
   private readonly out: { view: Channel<View>; chat: Channel<ChatPayload>; packOffer: Channel<PackOffer>; packData: Channel<Uint8Array> };
   private readonly validation = new Map<string, string[]>();
@@ -112,6 +125,8 @@ export class HostSession implements Session {
   private packStatus = new Map<string, PackStatus>();
   /** How often each member got the active custom pack, by playerId. */
   private transfers = new Map<string, number>();
+  /** The timer that closes the open reaction window, and when that window ends. */
+  private windowTimer: { handle: unknown; endsAt: number } | null = null;
 
   constructor(opts: HostOptions) {
     this.code = opts.code;
@@ -120,6 +135,7 @@ export class HostSession implements Session {
     this.store = opts.store;
     this.now = opts.now ?? Date.now;
     this.seed = opts.seed ?? randomSeed;
+    this.timers = opts.timers ?? pageTimers;
     this.playerId = opts.me.playerId;
     const self: Member = { ...pickIdentity(opts.me), peerId: opts.transport.selfId, seen: true };
     this.members = [self];
@@ -219,6 +235,8 @@ export class HostSession implements Session {
   }
 
   leave(): void {
+    if (this.windowTimer) this.timers.clear(this.windowTimer.handle);
+    this.windowTimer = null;
     this.transport.leave();
     this.listeners.clear();
   }
@@ -294,7 +312,12 @@ export class HostSession implements Session {
         break;
       case 'answer': {
         const seat = this.seatOf(from.playerId);
-        changed = seat !== null && this.input({ kind: 'answer', seat, promptId: intent.promptId, value: intent.value });
+        changed = seat !== null && this.input({ kind: 'answer', seat, promptId: intent.promptId, value: intent.value, now: this.now() });
+        break;
+      }
+      case 'react': {
+        const seat = this.seatOf(from.playerId);
+        changed = seat !== null && this.input({ kind: 'react', seat, uid: intent.uid, now: this.now() });
         break;
       }
       case 'nextRound':
@@ -396,12 +419,16 @@ export class HostSession implements Session {
     const selection = this.selection();
     const seated = this.seated(selection);
     if (!lp || !selection?.pack || this.startProblem(selection, seated)) return false;
-    const state = startGame(selection.pack, {
-      packId: lp.pack.id,
-      players: seated.map((m) => ({ playerId: m.playerId, name: m.name, color: m.color })),
-      options: this.options,
-      seed: this.seed(),
-    });
+    const state = startGame(
+      selection.pack,
+      {
+        packId: lp.pack.id,
+        players: seated.map((m) => ({ playerId: m.playerId, name: m.name, color: m.color })),
+        options: this.options,
+        seed: this.seed(),
+      },
+      this.now(),
+    );
     this.game = { packId: lp.key, addons: [...this.addons], pack: selection.pack, state };
     this.system(`The game begins: ${selection.pack.name}.`);
     return true;
@@ -563,12 +590,32 @@ export class HostSession implements Session {
     };
   }
 
+  /**
+   * Keeps one timer on the open reaction window. When it fires, the window closes and the play
+   * resolves. A reaction moves the end, so the timer follows it.
+   */
+  private scheduleWindow(): void {
+    const endsAt = this.game?.state.stack.at(-1)?.endsAt ?? null;
+    if (this.windowTimer?.endsAt === endsAt) return;
+    if (this.windowTimer) this.timers.clear(this.windowTimer.handle);
+    this.windowTimer = null;
+    if (endsAt === null) return;
+    const handle = this.timers.set(() => {
+      this.windowTimer = null;
+      if (this.input({ kind: 'timeout', now: Math.max(this.now(), endsAt) })) this.broadcast();
+      else this.scheduleWindow();
+    }, Math.max(0, endsAt - this.now()));
+    this.windowTimer = { handle, endsAt };
+  }
+
   /** Sends every connected member a fresh view and saves. */
   private broadcast(): void {
     this.seq++;
+    this.scheduleWindow();
     const lobby = this.lobbyView();
+    const now = this.now();
     for (const m of this.members) {
-      const game = this.game ? viewFor(this.game.state, this.seatOf(m.playerId)) : null;
+      const game = this.game ? viewFor(this.game.state, this.seatOf(m.playerId), now) : null;
       const view: View = { seq: this.seq, hostPlayerId: this.playerId, lobby, game };
       if (m === this.members[0]) this.ownView = view;
       else if (m.peerId) void this.out.view.send(view, m.peerId);
@@ -688,6 +735,8 @@ export function parseIntent(data: unknown): Intent | null {
     case 'rematch':
     case 'endGame':
       return { kind: d.kind };
+    case 'react':
+      return isStr(d.uid, 64) ? { kind: 'react', uid: d.uid } : null;
     case 'answer':
       return isStr(d.promptId) && smallJson(d.value) ? { kind: 'answer', promptId: d.promptId, value: d.value } : null;
     case 'kickForRound':

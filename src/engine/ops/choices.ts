@@ -1,7 +1,8 @@
-/** Choices: choosePlayer, selectPlayers, guess, choosePosition, confirm. */
+/** Choices: choosePlayer, selectPlayers, guess, choosePosition, confirm, chooseCard, nameCard. */
 import { resolveCount } from '../../packs/count';
 import type { Op } from '../../packs/types';
 import {
+  cardName,
   handOf,
   interpolate,
   isIn,
@@ -9,6 +10,7 @@ import {
   log,
   nameOf,
   participants,
+  resolvePlayer,
   resolvePlayers,
   resolveZone,
   seatVal,
@@ -19,20 +21,24 @@ import {
 import type { Seat } from '../types';
 import type { OpDef } from './types';
 
-/** Players an op may pick: still in, not protected (you can always pick yourself), holding a card if asked. */
+/**
+ * Players an op may pick: still in, not protected (you can always pick yourself), holding a
+ * given card or any cards at all if asked.
+ */
 function candidates(rt: Rt, op: Op): Seat[] {
   const self = selfSeat(rt);
   return resolvePlayers(rt, op.from).filter(
     (seat) =>
       isIn(rt, seat) &&
       (op.includeProtected === true || seat === self || !isUntargetable(rt, seat)) &&
-      (op.holding === undefined || handOf(rt, seat).cards.some((uid) => rt.s.cards[uid]?.cardId === op.holding)),
+      (op.holding === undefined || handOf(rt, seat).cards.some((uid) => rt.s.cards[uid]?.cardId === op.holding)) &&
+      (op.withCards !== true || handOf(rt, seat).cards.length > 0),
   );
 }
 
 export const choosePlayer: OpDef = {
   status: 'ready',
-  params: { as: 'as', from: 'players', holding: 'cardId', auto: 'bool', includeProtected: 'bool' },
+  params: { as: 'as', from: 'players', holding: 'cardId', withCards: 'bool', auto: 'bool', includeProtected: 'bool' },
   required: ['as', 'from'],
   asks: true,
   run(rt, op, frame) {
@@ -57,7 +63,7 @@ export const choosePlayer: OpDef = {
 
 export const selectPlayers: OpDef = {
   status: 'ready',
-  params: { as: 'as', from: 'players', includeProtected: 'bool' },
+  params: { as: 'as', from: 'players', withCards: 'bool', includeProtected: 'bool' },
   required: ['as', 'from'],
   run(rt, op) {
     const seats = candidates(rt, op);
@@ -95,18 +101,64 @@ export const guess: OpDef = {
   },
 };
 
+/**
+ * A position in a zone, 0 is the top. For a card already in the zone (Mouse Trapper) there are
+ * as many positions as cards. With `insert`, for a card going in, there is one more: the bottom.
+ */
 export const choosePosition: OpDef = {
   status: 'ready',
-  params: { zone: 'zone', as: 'as' },
+  params: { zone: 'zone', as: 'as', insert: 'bool' },
   required: ['zone', 'as'],
   asks: true,
   run(rt, op, frame) {
     const zone = resolveZone(rt, op.zone);
-    if (!zone || !zone.cards.length) return 'abort';
-    if (frame.answer === undefined) return { ask: { kind: 'choosePosition', choices: zone.cards.length } };
+    if (!zone || (!zone.cards.length && op.insert !== true)) return 'abort';
+    const positions = zone.cards.length + (op.insert === true ? 1 : 0);
+    if (frame.answer === undefined) return { ask: { kind: 'choosePosition', choices: positions } };
     const pos = frame.answer as number;
     setVar(rt, String(op.as), pos);
-    log(rt, `You chose position ${pos + 1} of ${zone.cards.length} (1 is the top).`, [selfSeat(rt)]);
+    log(rt, `You chose position ${pos + 1} of ${positions} (1 is the top).`, [selfSeat(rt)]);
+    return 'next';
+  },
+};
+
+/**
+ * One card from a zone, picked by `by` (yourself by default). Favor has the target pick a card
+ * from their own hand. Stores the card's uid.
+ */
+export const chooseCard: OpDef = {
+  status: 'ready',
+  params: { as: 'as', from: 'zone', by: 'players', text: 'text' },
+  required: ['as', 'from'],
+  asks: true,
+  run(rt, op, frame) {
+    const zone = resolveZone(rt, op.from);
+    const by = op.by === undefined ? selfSeat(rt) : resolvePlayer(rt, op.by);
+    if (!zone || !zone.cards.length || by === null) return 'abort';
+    if (frame.answer === undefined) {
+      const text = typeof op.text === 'string' ? { text: interpolate(rt, op.text) } : {};
+      return { ask: { kind: 'chooseCard', choices: [...zone.cards], to: by, ...text } };
+    }
+    setVar(rt, String(op.as), frame.answer as string);
+    return 'next';
+  },
+};
+
+/** Names a card that is in this round's deck. Stores its card id. Everyone hears the name. */
+export const nameCard: OpDef = {
+  status: 'ready',
+  params: { as: 'as' },
+  required: ['as'],
+  asks: true,
+  run(rt, op, frame) {
+    if (frame.answer === undefined) {
+      const players = participants(rt).length;
+      const choices = rt.pack.cards.filter((c) => resolveCount(c.count, players) > 0).map((c) => c.id);
+      return choices.length ? { ask: { kind: 'nameCard', choices } } : 'abort';
+    }
+    const id = frame.answer as string;
+    setVar(rt, String(op.as), id);
+    log(rt, `${nameOf(rt, selfSeat(rt))} names ${rt.defs.get(id)?.name ?? id}.`);
     return 'next';
   },
 };

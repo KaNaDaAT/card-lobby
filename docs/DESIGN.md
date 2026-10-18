@@ -138,13 +138,18 @@ Plain JSON, defined in `src/engine/types.ts`.
 
 ### Plays and reactions
 
-- A play moves one or more cards to `played:<seat>`, pushes it onto `stack`, opens a reaction
-  window, then resolves.
+- A play moves one or more cards to `played:<seat>` (or the `play` op's `to` zone), pushes it
+  onto `stack` with an end time, and the program waits. Several cards must make a combo.
 - The window has length 0 when no card in the merged deck can react. That is always the case
-  in Pets.
+  in Pets, where plays resolve at once.
 - When reactions exist (Exploding Kittens' Nope), the window always runs its full length, even
-  if nobody holds a reaction card. Closing early would tell everyone who has none. The host
-  times it and restarts it after each reaction.
+  if nobody holds a reaction card. Closing early would tell everyone who has none.
+- Anyone still in may send a `react` input with a card that has `onReact`. Its ops run at once
+  (`cancel` flips whether the play resolves, so a Nope on a Nope brings it back), and the
+  window restarts.
+- The engine has no clock. The host passes its clock with inputs (`now`), sets a timer for the
+  window's end and sends a `timeout` input then. The play resolves, or does nothing if it ends
+  canceled. Views carry the time left, so clients can count down.
 
 ### Hooks
 
@@ -154,7 +159,8 @@ Cards can define op lists for these events:
 |---|---|
 | `onPlay` | The card is played as an action |
 | `onDiscard` | The card lands face up in front of a player by playing it or being forced to. Not when revealed by elimination |
-| `onDraw` | The card is drawn (future, Exploding Kittens) |
+| `onDraw` | The card is drawn (the Exploding Kitten) |
+| `onReact` | The card is played as a reaction in another play's window (Nope) |
 | `whileHeld` | Passive effect while in hand (future) |
 | `onTurnStart`, `onTurnEnd` | Around the holder's turn (future) |
 | `showdownValue` | Value rules used only at round end |
@@ -258,14 +264,16 @@ Safety rules:
 
 ## Exploding Kittens check
 
-Power Hungry Pets never needs these, but the core leaves room for them so Exploding Kittens
-becomes new ops, not a rewrite:
+Power Hungry Pets never needs these, but the core left room for them so Exploding Kittens
+became new ops, not a rewrite (milestone 7, built):
 
 - Plays with several cards (combos), which is why a play is a list of card uids.
 - Prompts to any player, not just the active one (Favor makes the target choose).
-- Prompts with deadlines (the Nope window).
+- Reaction windows timed by the host (the Nope window).
 - The reaction stack (Nope cancels the top play, a Nope can be Noped).
-- `onDraw` (the kitten explodes when drawn), turn direction and extra turns owed (Attack).
+- `onDraw` (the kitten explodes when drawn) and extra turns owed (Attack).
 
-Milestone 7 writes the Exploding Kittens deck in the pack format as a paper test before any
-of its ops are built.
+Writing the deck in the pack format first (the paper test) showed what was missing: a play
+that repeats until the player passes, cards that only go in combos, moving a card by its id,
+secret moves (only the mover knows where the kitten went back), and dealing some cards before
+others go into the deck (`buildDeck` with `only` and `except`).

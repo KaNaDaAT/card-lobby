@@ -50,15 +50,27 @@ export interface Frame {
   kind: 'setup' | 'turn' | 'effect' | 'block';
   ops: Op[];
   pc: number;
-  /** Variables set by ops with `as`, plus `self`. `block` frames have none and use the frame below. */
+  /**
+   * Variables set by ops with `as`, plus `self`, and `card` (the card's uid) in card hooks.
+   * `block` frames have none and use the frame below.
+   */
   ctx?: Record<string, Json>;
   /** Card uid whose hook this frame runs. */
   source?: string;
+  /** Name of the combo whose effect this frame runs. */
+  combo?: string;
   /** The answer to the prompt the op at `pc` asked. The op runs again and consumes it. */
   answer?: Json;
 }
 
-export type PromptKind = 'play' | 'choosePlayer' | 'guess' | 'choosePosition' | 'confirm';
+export type PromptKind = 'play' | 'choosePlayer' | 'guess' | 'choosePosition' | 'confirm' | 'chooseCard' | 'nameCard';
+
+/** A multi-card play the pack allows, like a pair. `same`: one card id. `distinct`: all different. */
+export interface ComboRule {
+  name: string;
+  size: number;
+  match: 'same' | 'distinct';
+}
 
 interface PromptBase {
   id: string;
@@ -68,22 +80,48 @@ interface PromptBase {
   deadline?: number;
   /** Card id whose effect asks, for the prompt's title. */
   source?: string;
+  /** The combo whose effect asks, if any. */
+  combo?: string;
   text?: string;
 }
 
-/** The one question the game waits on. Answers: card uids, a seat, a value, a position, yes or no. */
+/**
+ * The one question the game waits on. Answers: card uids, a seat, a value, a position, yes or
+ * no, one card uid, a card id.
+ */
 export type Prompt =
-  | (PromptBase & { kind: 'play'; choices: string[]; min: number; max: number })
+  | (PromptBase & {
+      kind: 'play';
+      /** Every card in hand. */
+      choices: string[];
+      /** Cards that may be played on their own. The rest only go in combos. */
+      alone: string[];
+      combos: ComboRule[];
+      min: number;
+      max: number;
+      /** Label for playing nothing, when `min` is 0, like "Draw a card". */
+      pass?: string;
+    })
   | (PromptBase & { kind: 'choosePlayer'; choices: Seat[] })
   | (PromptBase & { kind: 'guess'; choices: number[] })
   | (PromptBase & { kind: 'choosePosition'; choices: number })
-  | (PromptBase & { kind: 'confirm' });
+  | (PromptBase & { kind: 'confirm' })
+  | (PromptBase & { kind: 'chooseCard'; choices: string[] })
+  | (PromptBase & { kind: 'nameCard'; choices: string[] });
 
-/** A play waiting for its reaction window to close. Always empty for Power Hungry Pets. */
+/**
+ * A play in its reaction window. Anyone may react (Nope) until `endsAt`, host clock in ms.
+ * Each reaction restarts the window. Always empty for Power Hungry Pets.
+ */
 export interface PendingPlay {
+  id: string;
   seat: Seat;
   cards: string[];
-  windowEndsAt?: number;
+  /** Where reactions go, the zone the play went to. */
+  zone: string;
+  endsAt: number;
+  canceled: boolean;
+  reactions: number;
 }
 
 export interface LogEntry {
@@ -115,8 +153,11 @@ export interface GameState {
   round: number;
   phase: GamePhase;
   players: PlayerState[];
-  /** `count` is the number of turns started this round, 0 during setup. */
-  turn: { seat: Seat; direction: 1 | -1; owed: number; count: number };
+  /**
+   * `count` is the number of turns started this round, 0 during setup. `owed[seat]` is how many
+   * extra turns that player takes in a row when their turn comes (Attack).
+   */
+  turn: { seat: Seat; direction: 1 | -1; owed: number[]; count: number };
   /** Who started the current round. */
   starter: Seat;
   cards: Record<string, CardInstance>;
@@ -131,15 +172,19 @@ export interface GameState {
   result: RoundResult | null;
   /** Set when the game is over. */
   winners: Seat[];
+  /** Card ids that can react (have onReact), so views can tell players what they could react with. */
+  reactCards: string[];
   /** Counter for card uids and prompt ids. */
   nextId: number;
   rng: number[];
   log: LogEntry[];
 }
 
+/** Inputs that may open or restart a reaction window read the host clock from `now`. */
 export type Input =
-  | { kind: 'answer'; seat: Seat; promptId: string; value: unknown }
-  | { kind: 'timeout'; promptId: string; now: number }
+  | { kind: 'answer'; seat: Seat; promptId: string; value: unknown; now?: number }
+  | { kind: 'react'; seat: Seat; uid: string; now: number }
+  | { kind: 'timeout'; now: number }
   | { kind: 'kickForRound'; seat: Seat }
   | { kind: 'connection'; seat: Seat; connected: boolean }
   | { kind: 'nextRound' };
@@ -186,6 +231,10 @@ export interface GameView {
   prompt: Prompt | null;
   /** Who the game waits on, for everyone. */
   waiting: { seat: Seat; kind: PromptKind } | null;
+  /** A play in its reaction window. `remainingMs` counts from when the view was made. */
+  window: { seat: Seat; cards: VisibleCard[]; remainingMs: number; canceled: boolean; reactions: number } | null;
+  /** Cards in your hand you could react with now. Only ever about your own hand. */
+  reactWith: string[];
   log: { text: string; private: boolean }[];
   result: RoundResult | null;
   winners: Seat[];

@@ -3,6 +3,7 @@
  * the middle, your cards at the bottom, a prompt bar when the game asks you something, and
  * round and game results. Clients never run rules, they only draw views and answer prompts.
  */
+import { findCombo } from '../../engine/ops/flow';
 import type { GameView, PlayerView, Prompt, PromptKind, Seat, VisibleCard, ZoneView } from '../../engine/types';
 import type { LobbyView } from '../../net/protocol';
 import type { CardDef, LoadedPack, Pack } from '../../packs/types';
@@ -21,9 +22,11 @@ export interface TableMemo {
   answered: string | null;
   /** Cards picked for a multi-card play. */
   picked: string[];
+  /** The reaction window this page already reacted to, so a double click cannot react twice. */
+  reacted: string | null;
 }
 
-export const newTableMemo = (): TableMemo => ({ seen: new Set(), answered: null, picked: [] });
+export const newTableMemo = (): TableMemo => ({ seen: new Set(), answered: null, picked: [], reacted: null });
 
 interface T {
   ctx: RoomCtx;
@@ -35,14 +38,18 @@ interface T {
   memo: TableMemo;
   prompt: Prompt | null;
   fresh: Set<string>;
+  /** Card ids of every card this seat can see, by uid. */
+  known: Map<string, string>;
 }
 
 const WAITING_FOR: Record<PromptKind, string> = {
-  play: 'to play a card',
+  play: 'to play',
   choosePlayer: 'to choose a player',
   guess: 'to guess a number',
   choosePosition: 'to put a card back',
   confirm: 'to decide',
+  chooseCard: 'to pick a card',
+  nameCard: 'to name a card',
 };
 
 export function tableMain(ctx: RoomCtx, lobby: LobbyView, game: GameView, memo: TableMemo): Child[] {
@@ -59,6 +66,7 @@ export function tableMain(ctx: RoomCtx, lobby: LobbyView, game: GameView, memo: 
     memo,
     prompt: game.prompt && game.prompt.id !== memo.answered ? game.prompt : null,
     fresh: new Set(),
+    known: knownCards(game),
   };
   if (game.prompt?.id !== memo.answered) memo.picked = memo.picked.filter((uid) => game.hand.some((c) => c.uid === uid));
 
@@ -66,6 +74,7 @@ export function tableMain(ctx: RoomCtx, lobby: LobbyView, game: GameView, memo: 
     'section',
     { class: 'panel table' },
     statusBar(t),
+    windowBanner(t),
     result(t),
     h('div', { class: 'seats' }, opponentOrder(t).map((p) => seat(t, p))),
     center(t),
@@ -77,6 +86,19 @@ export function tableMain(ctx: RoomCtx, lobby: LobbyView, game: GameView, memo: 
 }
 
 // ---------- Pieces ----------
+
+function knownCards(game: GameView): Map<string, string> {
+  const map = new Map<string, string>();
+  const add = (c: VisibleCard) => map.set(c.uid, c.cardId);
+  game.hand.forEach(add);
+  for (const p of game.players) {
+    p.played.forEach(add);
+    p.hand.known.forEach((k) => add(k.card));
+  }
+  for (const zone of Object.values(game.zones)) zone.known.forEach((k) => add(k.card));
+  game.window?.cards.forEach(add);
+  return map;
+}
 
 function def(t: T, cardId: string): CardDef {
   return t.defs.get(cardId) ?? { id: cardId, name: cardId, count: 0, text: '' };
@@ -141,6 +163,13 @@ function badges(t: T, p: PlayerView): Child[] {
 }
 
 function handCards(t: T, p: PlayerView, size: CardOpts['size']): Child[] {
+  // Big hands (Exploding Kittens) show as a pile with a count, plus any cards you know.
+  if (p.hand.count > 4) {
+    return [
+      h('div', { class: 'zone-stack' }, back(t, `hand:${p.seat}:pile:${t.game.round}`, { size }), h('span', { class: 'zone-count' }, p.hand.count)),
+      ...p.hand.known.map((k) => face(t, k.card, { size: 'sm' })),
+    ];
+  }
   const known = new Map(p.hand.known.map((k) => [k.index, k.card]));
   const out: Child[] = [];
   for (let i = 0; i < p.hand.count; i++) {
@@ -190,7 +219,10 @@ function center(t: T): HTMLElement {
       const hidden = t.pack.rules.zones[id]?.visibility === 'hidden';
       if (!hidden && zone.count === 0) return null;
       let cards: Child;
-      if (!hidden) {
+      if (!hidden && zone.count > 4) {
+        // A long public pile (a discard pile) shows its newest card on top.
+        cards = h('div', { class: 'zone-stack' }, face(t, zone.known.at(-1)!.card, { size: 'md' }), h('span', { class: 'zone-count' }, zone.count));
+      } else if (!hidden) {
         cards = h('div', { class: 'zone-cards' }, zone.known.map((k) => face(t, k.card, { size: 'md' })));
       } else if (zone.count === 0) {
         cards = h('div', { class: 'card card-md card-empty' }, h('span', null, 'Empty'));
@@ -217,11 +249,12 @@ function yourArea(t: T, me: PlayerView): HTMLElement {
   const playing = p?.kind === 'play';
   const multi = playing && p.max > 1;
   const choosable = p?.kind === 'choosePlayer' && p.choices.includes(me.seat);
+  const size = t.game.hand.length > 5 ? 'md' : 'lg';
   const hand = t.game.hand.map((card) => {
-    if (!playing) return face(t, card, { size: 'lg' });
+    if (!playing) return face(t, card, { size });
     const picked = t.memo.picked.includes(card.uid);
     return face(t, card, {
-      size: 'lg',
+      size,
       active: multi ? picked : true,
       onClick: () => (multi ? togglePick(t, card.uid) : void playCard(t, card)),
     });
@@ -264,29 +297,99 @@ function knocksYouOut(card: CardDef): boolean {
 }
 
 async function playCard(t: T, card: VisibleCard): Promise<void> {
-  const d = def(t, card.cardId);
-  if (knocksYouOut(d)) {
+  await playCards(t, [card.uid]);
+}
+
+/** Plays cards, after a warning when a single card would knock you out. */
+async function playCards(t: T, uids: string[]): Promise<void> {
+  const d = def(t, t.known.get(uids[0]!) ?? '');
+  if (uids.length === 1 && knocksYouOut(d)) {
     const sure = await confirmDialog(`Play ${d.name}?`, `${d.text} You will be out of this round.`, `Play ${d.name}`, 'Keep it');
     if (!sure) return;
   }
-  answer(t, [card.uid]);
+  answer(t, uids);
+}
+
+function react(t: T, uid: string, key: string): void {
+  t.memo.reacted = key;
+  t.ctx.session.act({ kind: 'react', uid });
+  t.ctx.redraw();
+}
+
+/** The play in its reaction window, a bar for the time left, and a button to react with. */
+function windowBanner(t: T): HTMLElement | null {
+  const w = t.game.window;
+  if (!w || t.game.phase !== 'round') return null;
+  const mine = w.seat === t.game.you;
+  const cards = w.cards.map((c) => def(t, c.cardId).name).join(' and ');
+  const key = `${w.cards.map((c) => c.uid).join()}:${w.reactions}`;
+  const uid = t.game.reactWith[0];
+  const headline = w.canceled
+    ? `${mine ? 'Your' : `${name(t, w.seat)}'s`} ${cards} is stopped.`
+    : `${mine ? 'You' : name(t, w.seat)} played ${cards}.`;
+  return h(
+    'div',
+    { class: `window${w.canceled ? ' is-canceled' : ''}`, role: 'status' },
+    h('div', { class: 'window-cards' }, w.cards.map((c) => face(t, c, { size: 'sm' }))),
+    h(
+      'div',
+      { class: 'window-text' },
+      h('strong', null, headline),
+      h('span', { class: 'muted small' }, w.canceled ? 'Another reaction can bring it back.' : 'Anyone can react until the bar runs out.'),
+    ),
+    uid
+      ? h(
+          'button',
+          { type: 'button', class: 'btn btn-danger', disabled: t.memo.reacted === key, onclick: () => react(t, uid, key) },
+          `${def(t, t.known.get(uid) ?? '').name}!`,
+        )
+      : null,
+    // The bar is timed by the host's time left when this view was made.
+    h('div', { class: 'window-bar', 'aria-hidden': 'true' }, h('span', { style: `animation-duration: ${w.remainingMs}ms` })),
+  );
 }
 
 function promptBar(t: T): HTMLElement | null {
   const p = t.prompt;
   if (!p || t.game.phase !== 'round') return null;
-  const source = p.source ? def(t, p.source).name : null;
+  const source = p.combo ?? (p.source ? def(t, p.source).name : null);
   const titled = (text: string) => (source ? `${source}: ${text}` : text);
   let title: string;
   let body: Child = null;
   switch (p.kind) {
-    case 'play':
-      title = p.max > 1 ? `Your turn. Pick ${p.min === p.max ? p.max : `${p.min} to ${p.max}`} cards to play.` : 'Your turn. Play one of your cards.';
-      body =
-        p.max > 1
-          ? h('button', { type: 'button', class: 'btn btn-primary', disabled: t.memo.picked.length < p.min, onclick: () => answer(t, t.memo.picked) }, 'Play selected')
-          : h('p', { class: 'muted small' }, 'Click a card in your hand. Click any other card to read it.');
+    case 'play': {
+      const pass =
+        p.min === 0 ? h('button', { type: 'button', class: 'btn', onclick: () => answer(t, []) }, p.pass ?? 'Pass') : null;
+      if (p.max === 1) {
+        title = 'Your turn. Play one of your cards.';
+        body = [h('p', { class: 'muted small' }, 'Click a card in your hand. Click any other card to read it.'), pass];
+        break;
+      }
+      const picked = t.memo.picked;
+      const ids = picked.map((uid) => t.known.get(uid) ?? '');
+      const combo = picked.length > 1 ? findCombo(p.combos, ids) : undefined;
+      const valid = picked.length === 1 ? p.alone.includes(picked[0]!) : Boolean(combo);
+      const label = valid
+        ? combo
+          ? `Play ${combo.name.toLowerCase()}`
+          : `Play ${def(t, ids[0]!).name}`
+        : picked.length
+          ? 'Not a play'
+          : 'Pick a card';
+      title = p.combos.length ? 'Your turn. Pick a card to play, or several for a combo.' : 'Your turn. Pick cards to play.';
+      body = [
+        h(
+          'div',
+          { class: 'choices' },
+          h('button', { type: 'button', class: 'btn btn-primary', disabled: !valid, onclick: () => void playCards(t, picked) }, label),
+          pass,
+        ),
+        p.combos.length
+          ? h('p', { class: 'muted small' }, `Combos: ${p.combos.map((c) => `${c.name} (${c.size} ${c.match === 'same' ? 'alike' : 'different'})`).join(', ')}.`)
+          : null,
+      ];
       break;
+    }
     case 'choosePlayer':
       title = titled('choose a player.');
       body = h(
@@ -319,6 +422,23 @@ function promptBar(t: T): HTMLElement | null {
       body = h('div', { class: 'choices choices-dense' }, buttons);
       break;
     }
+    case 'chooseCard':
+      title = titled(p.text ?? 'pick a card.');
+      body = h(
+        'div',
+        { class: 'choice-cards' },
+        p.choices.map((uid, i) => {
+          const cardId = t.known.get(uid);
+          return cardId
+            ? face(t, { uid, cardId }, { size: 'md', active: true, onClick: () => answer(t, uid) })
+            : h('button', { type: 'button', class: 'card card-md card-button card-back is-active', 'aria-label': `Face-down card ${i + 1}`, onclick: () => answer(t, uid) }, h('img', { src: t.lp.asset(t.lp.pack.art.back), alt: '' }));
+        }),
+      );
+      break;
+    case 'nameCard':
+      title = titled('name a card.');
+      body = h('div', { class: 'choices' }, p.choices.map((id) => h('button', { type: 'button', class: 'btn choice', onclick: () => answer(t, id) }, def(t, id).name)));
+      break;
     case 'confirm':
       title = titled(p.text ?? 'Are you sure?');
       body = h(
@@ -361,7 +481,12 @@ function statusBar(t: T): HTMLElement {
   return h(
     'div',
     { class: 'table-status' },
-    h('div', { class: 'table-info' }, h('strong', null, info), h('span', { class: 'muted' }, `First to ${g.tokensToWin} ${g.tokensToWin === 1 ? 'token' : 'tokens'} wins`)),
+    h(
+      'div',
+      { class: 'table-info' },
+      h('strong', null, info),
+      h('span', { class: 'muted' }, g.tokensToWin === 1 ? 'One round decides the game' : `First to ${g.tokensToWin} tokens wins`),
+    ),
     status,
     last ? h('p', { class: `ticker${last.private ? ' is-private' : ''}`, 'aria-hidden': 'true' }, last.text) : null,
   );

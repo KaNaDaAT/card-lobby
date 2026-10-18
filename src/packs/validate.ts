@@ -137,8 +137,16 @@ function checkImage(path: unknown, at: string, err: (path: string, msg: string) 
 
 interface Scope {
   vars: Set<string>;
-  setup: boolean;
+  /** Where asking a player is not allowed, named for the error. */
+  noAsk?: 'roundSetup' | 'onReact';
+  /** Inside onReact, where only a few ops make sense. */
+  react?: boolean;
 }
+
+/** What onReact may do: it runs at once, between other players' moves. */
+const REACT_OPS = ['cancel', 'log', 'if'];
+
+const hookScope = (): Scope => ({ vars: new Set(['card']) });
 
 class PackChecker {
   private errors: string[] = [];
@@ -289,9 +297,19 @@ class PackChecker {
       }
     }
 
-    this.checkOps(r.roundSetup, 'rules.roundSetup', { vars: new Set(), setup: true });
+    this.checkOps(r.roundSetup, 'rules.roundSetup', { vars: new Set(), noAsk: 'roundSetup' });
     if (!Array.isArray(r.turn) || !r.turn.length) this.err('rules.turn', 'expected a non-empty list of ops');
-    else this.checkOps(r.turn, 'rules.turn', { vars: new Set(), setup: false });
+    else this.checkOps(r.turn, 'rules.turn', { vars: new Set() });
+    this.checkCombos(r.combos);
+    if (r.reactions !== undefined) {
+      const sec = isObj(r.reactions) ? r.reactions.seconds : undefined;
+      if (isObj(sec)) {
+        const def = this.pack.options?.find((o) => o.id === sec.option);
+        if (!def || def.type !== 'number') this.err('rules.reactions.seconds', `no number option "${String(sec.option)}"`);
+      } else if (!(typeof sec === 'number' && sec >= 1 && sec <= 60)) {
+        this.err('rules.reactions.seconds', 'expected 1 to 60 seconds, or a number option');
+      }
+    }
 
     if (r.roundEnd !== undefined && !(isObj(r.roundEnd) && (r.roundEnd.lastStanding === undefined || typeof r.roundEnd.lastStanding === 'boolean'))) {
       this.err('rules.roundEnd', 'expected { lastStanding? }');
@@ -340,7 +358,7 @@ class PackChecker {
   }
 
   private checkCards(cards: unknown[], counts: number[]): void {
-    const known = ['id', 'name', 'value', 'count', 'text', 'image', 'tags', 'onPlay', 'onDiscard', 'onDraw', 'showdownValue'];
+    const known = ['id', 'name', 'value', 'count', 'text', 'image', 'tags', 'onPlay', 'onDiscard', 'onDraw', 'onReact', 'comboOnly', 'showdownValue'];
     const seen = new Set<string>();
     cards.forEach((raw, i) => {
       if (!isObj(raw) || !isStr(raw.id) || !raw.id) return this.err(`cards[${i}]`, 'expected a card with an id');
@@ -354,16 +372,18 @@ class PackChecker {
       this.checkCount(raw.count, `${at}.count`, counts);
       if (raw.image !== undefined) checkImage(raw.image, `${at}.image`, (a, m) => this.err(a, m), this.opts.files);
       if (raw.tags !== undefined && !(Array.isArray(raw.tags) && raw.tags.every(isStr))) this.err(`${at}.tags`, 'expected a list of words');
-      for (const hook of ['onPlay', 'onDiscard'] as const) {
-        if (raw[hook] !== undefined) this.checkOps(raw[hook], `${at}.${hook}`, { vars: new Set(), setup: false });
+      for (const hook of ['onPlay', 'onDiscard', 'onDraw'] as const) {
+        if (raw[hook] !== undefined) this.checkOps(raw[hook], `${at}.${hook}`, hookScope());
       }
-      if (raw.onDraw !== undefined) this.err(`${at}.onDraw`, 'onDraw is planned but not supported by this engine yet');
+      if (raw.onReact !== undefined) this.checkOps(raw.onReact, `${at}.onReact`, { ...hookScope(), noAsk: 'onReact', react: true });
+      if (raw.comboOnly !== undefined && typeof raw.comboOnly !== 'boolean') this.err(`${at}.comboOnly`, 'expected true or false');
+      if (raw.comboOnly === true && !this.pack.rules?.combos?.length) this.err(`${at}.comboOnly`, 'the pack has no combos to play this card in');
       if (raw.showdownValue !== undefined) {
         if (!Array.isArray(raw.showdownValue)) this.err(`${at}.showdownValue`, 'expected a list of { if, value }');
         else raw.showdownValue.forEach((rule, j) => {
           const path = `${at}.showdownValue[${j}]`;
           if (!isObj(rule)) return this.err(path, 'expected { if, value }');
-          this.checkCond(rule.if, `${path}.if`, { vars: new Set(), setup: false });
+          this.checkCond(rule.if, `${path}.if`, { vars: new Set() });
           if (!(Number.isFinite(rule.value) || rule.value === 'highest' || rule.value === 'lowest')) {
             this.err(`${path}.value`, 'expected a number, "highest" or "lowest"');
           }
@@ -385,6 +405,23 @@ class PackChecker {
     }
   }
 
+  private checkCombos(raw: unknown): void {
+    if (raw === undefined) return;
+    if (!Array.isArray(raw)) return this.err('rules.combos', 'expected a list of combos');
+    const names = new Set<string>();
+    raw.forEach((c, i) => {
+      const at = `rules.combos[${i}]`;
+      if (!isObj(c)) return this.err(at, 'expected { name, size, match, ops }');
+      for (const key of Object.keys(c)) if (!['name', 'size', 'match', 'ops'].includes(key)) this.err(`${at}.${key}`, 'unknown field');
+      if (!isStr(c.name) || !c.name.trim()) this.err(`${at}.name`, 'missing');
+      else if (names.has(c.name)) this.err(`${at}.name`, 'duplicate combo name');
+      else names.add(c.name);
+      if (!isInt(c.size, 2) || (c.size as number) > 10) this.err(`${at}.size`, 'expected 2 to 10 cards');
+      if (c.match !== 'same' && c.match !== 'distinct') this.err(`${at}.match`, 'expected same or distinct');
+      this.checkOps(c.ops, `${at}.ops`, { vars: new Set() });
+    });
+  }
+
   private checkOps(ops: unknown, path: string, scope: Scope): void {
     if (!Array.isArray(ops)) return this.err(path, 'expected a list of ops');
     ops.forEach((op, i) => {
@@ -393,7 +430,9 @@ class PackChecker {
       const def = getOp(op.op);
       if (!def) return this.err(at, `unknown op "${op.op}"`);
       if (def.status === 'future') return this.err(at, `op "${op.op}" is planned but not supported by this engine yet`);
-      if (scope.setup && def.asks) this.err(at, `"${op.op}" asks a player, which roundSetup cannot do`);
+      if (scope.noAsk && def.asks) this.err(at, `"${op.op}" asks a player, which ${scope.noAsk} cannot do`);
+      if (scope.react && !REACT_OPS.includes(op.op)) this.err(at, `onReact can only use ${REACT_OPS.join(', ')}`);
+      if (!scope.react && def.reactOnly) this.err(at, `"${op.op}" only works in onReact`);
       for (const key of def.required) if (!(key in op)) this.err(at, `"${op.op}" needs "${key}"`);
       for (const key of Object.keys(op)) if (key !== 'op' && !(key in def.params)) this.err(`${at}.${key}`, `"${op.op}" has no param "${key}"`);
 
@@ -501,6 +540,17 @@ class PackChecker {
       case 'audience':
         if (v !== 'all') this.checkPlayers(v, path, scope);
         return;
+      case 'cardIds':
+        if (!Array.isArray(v) || !v.length) return this.err(path, 'expected a list of card ids');
+        for (const id of v) if (!isStr(id) || !this.cardIds.has(id)) this.err(path, `no card "${String(id)}"`);
+        return;
+      case 'pick':
+        if (isStr(v) && v.startsWith('$')) return this.checkVar(v, path, scope);
+        if (v !== 'random') this.err(path, 'expected random or a $variable');
+        return;
+      case 'what':
+        if (v !== 'stackTop') this.err(path, 'expected stackTop');
+        return;
       case 'as':
         return;
     }
@@ -530,6 +580,12 @@ class PackChecker {
         if (!Array.isArray(v) || v.length !== 2) return this.err(`${path}.handHasValue`, 'expected [player, value]');
         this.checkPlayers(v[0], `${path}.handHasValue[0]`, scope, true);
         return this.checkValue(v[1], `${path}.handHasValue[1]`, scope);
+      case 'handHas':
+        if (!Array.isArray(v) || v.length !== 2) return this.err(`${path}.handHas`, 'expected [player, card]');
+        this.checkPlayers(v[0], `${path}.handHas[0]`, scope, true);
+        if (isStr(v[1]) && v[1].startsWith('$')) return this.checkVar(v[1], `${path}.handHas[1]`, scope);
+        if (!isStr(v[1]) || !this.cardIds.has(v[1])) this.err(`${path}.handHas[1]`, `no card "${String(v[1])}"`);
+        return;
       case 'anyHandHas':
         if (!isStr(v) || !this.cardIds.has(v)) this.err(`${path}.anyHandHas`, `no card "${String(v)}"`);
         return;

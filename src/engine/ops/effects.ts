@@ -1,4 +1,5 @@
-/** Effects: peek, reveal, swap, discard, compareHands, eliminate, status. */
+/** Effects: peek, reveal, swap, discard, compareHands, eliminate, status, take. */
+import { randInt } from '../rng';
 import {
   allSeats,
   cardName,
@@ -13,6 +14,7 @@ import {
   playedOf,
   resolvePlayer,
   resolvePlayers,
+  resolveValue,
   resolveZone,
   resolveZones,
   seatVal,
@@ -48,7 +50,7 @@ export const peek: OpDef = {
         ? zoneLabel(rt, zone)
         : `the top ${uids.length === 1 ? 'card' : `${uids.length} cards`} of ${zoneLabel(rt, zone)}`;
     log(rt, `${nameOf(rt, self)} looks at ${what}.`);
-    log(rt, `You see ${cardList(rt, uids)}.`, [self]);
+    log(rt, uids.length > 1 ? `You see, from the top: ${uids.map((uid) => cardName(rt, uid)).join(', ')}.` : `You see ${cardList(rt, uids)}.`, [self]);
     return 'next';
   },
 };
@@ -173,6 +175,59 @@ export const status: OpDef = {
     }
     const label = (rt.pack.rules.statuses?.[id]?.label ?? id).toLowerCase();
     log(rt, `${names(rt, seats)} ${seats.length === 1 ? 'is' : 'are'} ${label}${UNTIL_TEXT[until]}.`);
+    return 'next';
+  },
+};
+
+/**
+ * Moves one card from a zone to another, your hand by default. `pick` is `random`, or a variable
+ * holding a card uid (from chooseCard) or a card id (from nameCard). A named card the zone does
+ * not hold ends the effect. Everyone hears what was named, nobody else learns a random card.
+ */
+export const take: OpDef = {
+  status: 'ready',
+  params: { from: 'zone', pick: 'pick', to: 'zone' },
+  required: ['from', 'pick'],
+  run(rt, op) {
+    const self = selfSeat(rt);
+    const from = resolveZone(rt, op.from);
+    const to = resolveZone(rt, op.to ?? 'hand:self');
+    if (!from || !to || from === to || !from.cards.length) return 'abort';
+    let uid: string | undefined;
+    let named = false;
+    if (op.pick === 'random') {
+      uid = from.cards[randInt(rt.s.rng, from.cards.length)];
+    } else {
+      const value = resolveValue(rt, op.pick);
+      if (typeof value === 'string' && from.cards.includes(value)) {
+        uid = value;
+      } else if (typeof value === 'string' && rt.defs.has(value)) {
+        named = true;
+        uid = from.cards.find((u) => rt.s.cards[u]!.cardId === value);
+        if (!uid) {
+          const holder = from.owner !== undefined ? nameOf(rt, from.owner) : capitalize(zoneLabel(rt, from));
+          log(rt, `${holder} has no ${rt.defs.get(value)!.name}. Nothing happens.`);
+          return 'abort';
+        }
+      }
+    }
+    if (!uid) return 'abort';
+    moveCard(rt, uid, from, to, 'bottom');
+    const card = cardName(rt, uid);
+    const taker = to.owner ?? self;
+    if (from.visibility === 'public') {
+      log(rt, `${nameOf(rt, taker)} takes ${card} from ${zoneLabel(rt, from)}.`);
+    } else if (from.owner !== undefined) {
+      const giver = nameOf(rt, from.owner);
+      log(rt, named ? `${giver} gives ${nameOf(rt, taker)} ${card}.` : `${nameOf(rt, taker)} takes a card from ${giver}.`);
+      if (!named) {
+        log(rt, `You got ${card}.`, [taker]);
+        log(rt, `${nameOf(rt, taker)} took your ${card}.`, [from.owner]);
+      }
+    } else {
+      log(rt, `${nameOf(rt, taker)} takes a card from ${zoneLabel(rt, from)}.`);
+      log(rt, `You got ${card}.`, [taker]);
+    }
     return 'next';
   },
 };

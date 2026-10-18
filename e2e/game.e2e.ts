@@ -12,11 +12,13 @@ test('three players play a whole game in the browser', async ({ context, page })
   await page.click('button:has-text("Start game")');
   for (const p of [page, tom, mia]) await expect(p.locator('.table')).toBeVisible();
 
-  // Clicking a card that cannot be played shows it large with its text.
-  await page.locator('.card-inspect').first().click();
-  await expect(page.locator('dialog.card-dialog')).toBeVisible();
-  await page.click('dialog.card-dialog button:has-text("Close")');
-  await expect(page.locator('dialog.card-dialog')).toHaveCount(0);
+  // Clicking a card that cannot be played shows it large with its text. Whoever starts can
+  // play both their cards, so someone else looks.
+  const reader = (await page.locator('.prompt-bar').count()) ? tom : page;
+  await reader.locator('.card-inspect').first().click();
+  await expect(reader.locator('dialog.card-dialog')).toBeVisible();
+  await reader.click('dialog.card-dialog button:has-text("Close")');
+  await expect(reader.locator('dialog.card-dialog')).toHaveCount(0);
 
   const moves = await playToTheEnd(page, [page, tom, mia]);
   expect(moves).toBeGreaterThan(5);

@@ -98,7 +98,7 @@ describe('validatePack', () => {
       p.art.back = '../secret.svg';
       card(p, 'king-cat').image = 'https://example.com/x.png';
       (card(p, 'king-cat') as unknown as Record<string, unknown>).onplay = [];
-      card(p, 'crystal-bowl').onDraw = [];
+
       p.cards.push(clone(card(p, 'king-cat')));
     });
     const errors = validatePack(p, { files: new Set(['art/back.svg']) });
@@ -109,11 +109,42 @@ describe('validatePack', () => {
         'pack.json: art.back: must be a relative path inside the pack',
         'pack.json: cards.king-cat.image: must be a relative path inside the pack',
         'pack.json: cards.king-cat.onplay: unknown field',
-        'pack.json: cards.crystal-bowl.onDraw: onDraw is planned but not supported by this engine yet',
         'pack.json: cards.king-cat: duplicate card id',
       ]),
     );
     expect(validatePack(petsBase, { files: new Set() })).toContain('pack.json: art.cover: file "art/cover.svg" is missing');
+  });
+
+  it('keeps onReact small and cancel inside it, and checks combos', () => {
+    const p = petsWith((p) => {
+      card(p, 'shell-shield').onReact = [{ op: 'choosePlayer', as: 't', from: 'others' }];
+      card(p, 'mouse-trapper').onPlay = [{ op: 'cancel', what: 'stackTop' }];
+      card(p, 'battle-bunny').comboOnly = true;
+      p.rules.reactions = { seconds: 0 };
+    });
+    const errors = validatePack(p);
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        'pack.json: cards.shell-shield.onReact[0]: "choosePlayer" asks a player, which onReact cannot do',
+        'pack.json: cards.shell-shield.onReact[0]: onReact can only use cancel, log, if',
+        'pack.json: cards.mouse-trapper.onPlay[0]: "cancel" only works in onReact',
+        'pack.json: cards.battle-bunny.comboOnly: the pack has no combos to play this card in',
+        'pack.json: rules.reactions.seconds: expected 1 to 60 seconds, or a number option',
+      ]),
+    );
+
+    const combos = petsWith((p) => {
+      p.rules.combos = [
+        { name: 'Pair', size: 2, match: 'same', ops: [{ op: 'take', from: 'hand:$t', pick: 'random' }] },
+        { name: 'Pair', size: 1, match: 'any' as never, ops: [] },
+      ];
+    });
+    expect(validatePack(combos)).toEqual([
+      'pack.json: rules.combos[0].ops[0].from: variable "$t" is not set by an earlier op',
+      'pack.json: rules.combos[1].name: duplicate combo name',
+      'pack.json: rules.combos[1].size: expected 2 to 10 cards',
+      'pack.json: rules.combos[1].match: expected same or distinct',
+    ]);
   });
 
   it('survives garbage', () => {

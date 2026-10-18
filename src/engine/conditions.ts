@@ -18,6 +18,12 @@ export function evalCond(rt: Rt, cond: Condition): boolean {
     if (seat === null || typeof value !== 'number') return false;
     return handOf(rt, seat).cards.some((uid) => (rt.defs.get(rt.s.cards[uid]!.cardId)?.value ?? null) === value);
   }
+  if ('handHas' in cond) {
+    const seat = resolvePlayer(rt, cond.handHas[0]);
+    const id = resolveValue(rt, cond.handHas[1]);
+    if (seat === null || typeof id !== 'string') return false;
+    return handOf(rt, seat).cards.some((uid) => rt.s.cards[uid]?.cardId === id);
+  }
   if ('anyHandHas' in cond) {
     return inRound(rt).some((seat) => handOf(rt, seat).cards.some((uid) => rt.s.cards[uid]?.cardId === cond.anyHandHas));
   }

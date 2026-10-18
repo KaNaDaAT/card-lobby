@@ -51,7 +51,20 @@ export interface CardDef {
   onPlay?: Op[];
   onDiscard?: Op[];
   onDraw?: Op[];
+  /** Runs when the card is played as a reaction while another play's window is open (Nope). */
+  onReact?: Op[];
+  /** Only playable as part of a combo, like the cat cards of Exploding Kittens. */
+  comboOnly?: boolean;
   showdownValue?: ValueRule[];
+}
+
+/** A multi-card play. Its ops run instead of the cards' own onPlay. */
+export interface ComboDef {
+  name: string;
+  size: number;
+  /** `same`: every card has the same id. `distinct`: every card is different. */
+  match: 'same' | 'distinct';
+  ops: Op[];
 }
 
 export interface ValueRule {
@@ -81,6 +94,9 @@ export interface Rules {
   roundSetup: Op[];
   turn: Op[];
   roundEnd?: { lastStanding?: boolean };
+  combos?: ComboDef[];
+  /** How long a reaction window stays open, for packs with `onReact` cards. */
+  reactions?: { seconds: number | OptionRef };
   showdown?: {
     tieBreak?: 'highestPlayed' | 'sumPlayed' | 'none' | OptionRef;
     stillTied?: 'allWin';
@@ -112,6 +128,7 @@ export type Condition =
   | { is: string }
   | { in: string }
   | { handHasValue: [string, string | number] }
+  | { handHas: [string, string] }
   | { anyHandHas: string }
   | { not: Condition }
   | { all: Condition[] }

@@ -1,0 +1,222 @@
+{
+  "format": 1,
+  "id": "exploding-kittens",
+  "name": "Exploding Kittens",
+  "version": "0.1.0",
+  "author": "Card Lobby (rules adaptation, original game by Exploding Kittens)",
+  "description": "Play as many cards as you like, then draw. Draw an Exploding Kitten without a Defuse and you are out. Last one standing wins.",
+  "engine": "0.1",
+  "players": { "min": 2, "max": 5 },
+  "art": {
+    "cover": "art/cover.svg",
+    "back": "art/back.svg",
+    "accent": "#ff7b54"
+  },
+  "options": [
+    {
+      "id": "nopeSeconds",
+      "label": "Seconds to Nope",
+      "type": "number",
+      "min": 2,
+      "max": 10,
+      "default": 4
+    }
+  ],
+  "rules": {
+    "zones": {
+      "deck": { "visibility": "hidden", "label": "the draw pile" },
+      "discard": { "visibility": "public", "label": "the discard pile" },
+      "box": { "visibility": "hidden", "label": "the box" }
+    },
+    "playerZones": {
+      "hand": { "visibility": "owner" },
+      "played": { "visibility": "public" }
+    },
+    "roundSetup": [
+      { "op": "buildDeck", "to": "deck", "except": ["exploding-kitten", "defuse"] },
+      { "op": "shuffle", "zone": "deck" },
+      { "op": "deal", "from": "deck", "to": "all", "count": 7 },
+      { "op": "buildDeck", "to": "box", "only": ["defuse"] },
+      { "op": "deal", "from": "box", "to": "all", "count": 1 },
+      { "op": "move", "from": "box", "to": "deck", "count": "all" },
+      { "op": "buildDeck", "to": "deck", "only": ["exploding-kitten"] },
+      { "op": "shuffle", "zone": "deck" }
+    ],
+    "turn": [
+      { "op": "play", "min": 0, "max": 5, "repeat": true, "to": "discard", "pass": "Draw a card" },
+      { "op": "draw", "who": "self" }
+    ],
+    "roundEnd": { "lastStanding": true },
+    "combos": [
+      {
+        "name": "Pair",
+        "size": 2,
+        "match": "same",
+        "ops": [
+          { "op": "choosePlayer", "as": "t", "from": "others", "withCards": true },
+          { "op": "take", "from": "hand:$t", "pick": "random" }
+        ]
+      },
+      {
+        "name": "Three of a kind",
+        "size": 3,
+        "match": "same",
+        "ops": [
+          { "op": "choosePlayer", "as": "t", "from": "others", "withCards": true },
+          { "op": "nameCard", "as": "n" },
+          { "op": "take", "from": "hand:$t", "pick": "$n" }
+        ]
+      },
+      {
+        "name": "Five different",
+        "size": 5,
+        "match": "distinct",
+        "ops": [
+          { "op": "chooseCard", "as": "c", "from": "discard" },
+          { "op": "take", "from": "discard", "pick": "$c" }
+        ]
+      }
+    ],
+    "reactions": { "seconds": { "option": "nopeSeconds" } },
+    "scoring": { "roundWin": 1, "toWin": 1 },
+    "rounds": { "first": "random", "next": "lastWinner" }
+  },
+  "cards": [
+    {
+      "id": "exploding-kitten",
+      "name": "Exploding Kitten",
+      "count": { "perPlayer": 1, "offset": -1 },
+      "image": "art/exploding-kitten.svg",
+      "text": "Show it as soon as you draw it. If you have a Defuse, it is played for you and you put the kitten back anywhere in the draw pile, in secret. Otherwise you explode and are out.",
+      "onDraw": [
+        { "op": "move", "card": "$card", "from": "hand:self", "to": "played:self" },
+        { "op": "log", "text": "{self} drew an Exploding Kitten!" },
+        {
+          "op": "if",
+          "cond": { "handHas": ["self", "defuse"] },
+          "then": [
+            { "op": "move", "match": "defuse", "from": "hand:self", "to": "discard" },
+            { "op": "log", "text": "{self} defuses it." },
+            { "op": "choosePosition", "zone": "deck", "as": "pos", "insert": true },
+            { "op": "move", "card": "$card", "from": "played:self", "to": "deck", "at": "$pos", "secret": true },
+            { "op": "log", "text": "{self} puts the kitten back into the draw pile, somewhere." }
+          ],
+          "else": [
+            { "op": "log", "text": "{self} explodes!" },
+            { "op": "eliminate", "who": "self" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "defuse",
+      "name": "Defuse",
+      "count": 6,
+      "image": "art/defuse.svg",
+      "comboOnly": true,
+      "text": "Saves you from an Exploding Kitten. It is played for you when you draw one.",
+      "tags": ["defuse"]
+    },
+    {
+      "id": "nope",
+      "name": "Nope",
+      "count": 5,
+      "image": "art/nope.svg",
+      "comboOnly": true,
+      "text": "Play it any time, even on someone else's turn, to stop a play. A Nope can stop a Nope.",
+      "onReact": [{ "op": "cancel", "what": "stackTop" }]
+    },
+    {
+      "id": "attack",
+      "name": "Attack",
+      "count": 4,
+      "image": "art/attack.svg",
+      "text": "End your turn without drawing. The next player takes 2 turns in a row.",
+      "onPlay": [
+        { "op": "addTurns", "who": "next", "count": 2 },
+        { "op": "endTurn", "all": true }
+      ]
+    },
+    {
+      "id": "skip",
+      "name": "Skip",
+      "count": 4,
+      "image": "art/skip.svg",
+      "text": "End your turn without drawing.",
+      "onPlay": [{ "op": "endTurn" }]
+    },
+    {
+      "id": "favor",
+      "name": "Favor",
+      "count": 4,
+      "image": "art/favor.svg",
+      "text": "Another player gives you a card of their choice.",
+      "onPlay": [
+        { "op": "choosePlayer", "as": "t", "from": "others", "withCards": true },
+        { "op": "chooseCard", "as": "c", "from": "hand:$t", "by": "$t", "text": "pick a card to give {self}." },
+        { "op": "take", "from": "hand:$t", "pick": "$c" }
+      ]
+    },
+    {
+      "id": "shuffle",
+      "name": "Shuffle",
+      "count": 4,
+      "image": "art/shuffle.svg",
+      "text": "Shuffle the draw pile.",
+      "onPlay": [{ "op": "shuffle", "zone": "deck" }]
+    },
+    {
+      "id": "see-the-future",
+      "name": "See the Future",
+      "count": 5,
+      "image": "art/see-the-future.svg",
+      "text": "Look at the top 3 cards of the draw pile, in secret.",
+      "onPlay": [{ "op": "peek", "zone": "deck", "count": 3 }]
+    },
+    {
+      "id": "tacocat",
+      "name": "Tacocat",
+      "count": 4,
+      "image": "art/tacocat.svg",
+      "comboOnly": true,
+      "tags": ["cat"],
+      "text": "No action on its own. Play two alike to steal a random card, three alike to name the card you want."
+    },
+    {
+      "id": "cattermelon",
+      "name": "Cattermelon",
+      "count": 4,
+      "image": "art/cattermelon.svg",
+      "comboOnly": true,
+      "tags": ["cat"],
+      "text": "No action on its own. Play two alike to steal a random card, three alike to name the card you want."
+    },
+    {
+      "id": "hairy-potato-cat",
+      "name": "Hairy Potato Cat",
+      "count": 4,
+      "image": "art/hairy-potato-cat.svg",
+      "comboOnly": true,
+      "tags": ["cat"],
+      "text": "No action on its own. Play two alike to steal a random card, three alike to name the card you want."
+    },
+    {
+      "id": "beard-cat",
+      "name": "Beard Cat",
+      "count": 4,
+      "image": "art/beard-cat.svg",
+      "comboOnly": true,
+      "tags": ["cat"],
+      "text": "No action on its own. Play two alike to steal a random card, three alike to name the card you want."
+    },
+    {
+      "id": "rainbow-ralphing-cat",
+      "name": "Rainbow-Ralphing Cat",
+      "count": 4,
+      "image": "art/rainbow-ralphing-cat.svg",
+      "comboOnly": true,
+      "tags": ["cat"],
+      "text": "No action on its own. Play two alike to steal a random card, three alike to name the card you want."
+    }
+  ]
+}

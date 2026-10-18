@@ -3,9 +3,9 @@
  * names an op missing here, or marked `future`, is rejected by validation before it runs.
  */
 import { buildDeck, deal, draw, move, shuffle } from './cards';
-import { choosePlayer, choosePosition, confirm, guess, selectPlayers } from './choices';
-import { compareHands, discard, eliminate, peek, reveal, status, swap } from './effects';
-import { endRound, ifOp, logOp, play } from './flow';
+import { chooseCard, choosePlayer, choosePosition, confirm, guess, nameCard, selectPlayers } from './choices';
+import { compareHands, discard, eliminate, peek, reveal, status, swap, take } from './effects';
+import { addTurns, cancel, endRound, endTurn, ifOp, logOp, play } from './flow';
 import type { OpDef } from './types';
 
 const future: OpDef = { status: 'future', params: {}, required: [] };
@@ -32,14 +32,14 @@ export const OPS: Record<string, OpDef> = {
   status,
   if: ifOp,
   log: logOp,
-  // Designed for Exploding Kittens (milestone 7), not built yet.
-  endTurn: future,
-  addTurns: future,
+  endTurn,
+  addTurns,
+  chooseCard,
+  nameCard,
+  take,
+  cancel,
+  // Designed for Exploding Kittens expansions, not built yet.
   reverse: future,
-  chooseCard: future,
-  nameCard: future,
-  take: future,
-  cancel: future,
   reorder: future,
 };
 

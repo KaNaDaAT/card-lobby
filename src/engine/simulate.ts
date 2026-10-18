@@ -12,18 +12,40 @@ import { newGame } from './testing';
 import type { GameState, Input, Prompt, Seat } from './types';
 import { knows } from './view';
 
-const MAX_INPUTS = 3000;
+const MAX_INPUTS = 8000;
 
 /** Base games per run. `SIM_GAMES=5000 npm test` for a deeper run. */
 export const SIM_GAMES =
   Number((globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.SIM_GAMES) || 600;
 
-function randomAnswer(rng: number[], p: Prompt): unknown {
+/** Every play the prompt allows: passing, single cards, and one of each combo the hand makes. */
+function playOptions(p: Extract<Prompt, { kind: 'play' }>, s: GameState): string[][] {
+  const options: string[][] = p.min === 0 ? [[]] : [];
+  for (const uid of p.alone) options.push([uid]);
+  const byId = new Map<string, string[]>();
+  for (const uid of p.choices) byId.set(s.cards[uid]!.cardId, [...(byId.get(s.cards[uid]!.cardId) ?? []), uid]);
+  for (const combo of p.combos) {
+    if (combo.size > p.max) continue;
+    if (combo.match === 'same') {
+      for (const uids of byId.values()) if (uids.length >= combo.size) options.push(uids.slice(0, combo.size));
+    } else {
+      const distinct = [...byId.values()].map((uids) => uids[0]!);
+      if (distinct.length >= combo.size) options.push(distinct.slice(0, combo.size));
+    }
+  }
+  return options;
+}
+
+function randomAnswer(rng: number[], p: Prompt, s: GameState): unknown {
   switch (p.kind) {
-    case 'play':
-      return [p.choices[randInt(rng, p.choices.length)]];
+    case 'play': {
+      const options = playOptions(p, s);
+      return options[randInt(rng, options.length)];
+    }
     case 'choosePlayer':
     case 'guess':
+    case 'chooseCard':
+    case 'nameCard':
       return p.choices[randInt(rng, p.choices.length)];
     case 'choosePosition':
       return randInt(rng, p.choices);
@@ -97,6 +119,8 @@ export function playRandomGame(pack: Pack, players: number, seed: number, chaos:
   const rng = seedRng(seed * 7919 + 13);
   let s = newGame(pack, players, seed);
   let inputs = 0;
+  // The host clock, for reaction windows. It only moves forward.
+  let now = 0;
   const step = (input: Input, mayFail = false) => {
     const result = apply(pack, s, input);
     if (result.error && !mayFail) throw new Error(`seed ${seed}: ${result.error} for ${JSON.stringify(input)}`);
@@ -129,9 +153,27 @@ export function playRandomGame(pack: Pack, players: number, seed: number, chaos:
       step({ kind: 'connection', seat: p.seat, connected: !p.connected });
       continue;
     }
+    const window = s.stack.at(-1);
+    if (window) {
+      // Players holding a reaction card may use it while the window is open. Otherwise it runs out.
+      const reactors = s.players
+        .filter((p) => p.round === 'in')
+        .flatMap((p) => viewFor(s, p.seat).reactWith.map((uid) => ({ seat: p.seat, uid })));
+      const room = window.endsAt - now;
+      if (reactors.length && room > 0 && randInt(rng, 3) === 0) {
+        const r = reactors[randInt(rng, reactors.length)]!;
+        now += randInt(rng, room);
+        step({ kind: 'react', seat: r.seat, uid: r.uid, now });
+      } else {
+        now = Math.max(now, window.endsAt);
+        step({ kind: 'timeout', now });
+      }
+      continue;
+    }
     const prompt = s.prompt;
     if (!prompt) throw new Error(`seed ${seed}: round running without a prompt`);
-    step({ kind: 'answer', seat: prompt.to, promptId: prompt.id, value: randomAnswer(rng, prompt) });
+    now += 500;
+    step({ kind: 'answer', seat: prompt.to, promptId: prompt.id, value: randomAnswer(rng, prompt, s), now });
   }
   checkState(pack, s);
   checkViews(s);

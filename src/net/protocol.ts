@@ -98,6 +98,7 @@ export type Intent =
   | { kind: 'setOption'; id: string; value: OptionValue }
   | { kind: 'start' }
   | { kind: 'answer'; promptId: string; value: unknown }
+  | { kind: 'react'; uid: string }
   | { kind: 'nextRound' }
   | { kind: 'rematch' }
   | { kind: 'endGame' }

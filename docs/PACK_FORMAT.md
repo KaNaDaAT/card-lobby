@@ -3,11 +3,14 @@
 A pack is one game: its cards, its rules, its art, and its addons. Packs are data only. The
 engine ships a fixed set of ops (building blocks), and packs combine them.
 
-Reference pack: [public/packs/power-hungry-pets](../public/packs/power-hungry-pets).
+Reference packs: [public/packs/power-hungry-pets](../public/packs/power-hungry-pets) and
+[public/packs/exploding-kittens](../public/packs/exploding-kittens) (combos, reactions, extra
+turns, `onDraw`).
 
 Status markers in this document:
 
 - **M2** means built in milestone 2 (the Power Hungry Pets engine).
+- **M7** means built in milestone 7 (for Exploding Kittens).
 - **Future** means designed but not scheduled. A pack that uses a future op is rejected.
 
 ## Folder layout
@@ -66,7 +69,9 @@ third of card art calm.
 | `tags` | string[] | Optional, for filters and combos |
 | `onPlay` | Op[] | Runs when the card is played as an action |
 | `onDiscard` | Op[] | Runs when the card lands face up in front of a player, by playing it or being forced to. Not when revealed by elimination |
-| `onDraw` | Op[] | **Future.** Runs when the card is drawn |
+| `onDraw` | Op[] | M7. Runs when the card is drawn (an Exploding Kitten) |
+| `onReact` | Op[] | M7. Makes the card a reaction: it can be played by anyone while a play's reaction window is open. Only `cancel`, `log` and `if`, and nothing that asks |
+| `comboOnly` | boolean | M7. The card cannot be played alone, only in a combo (cat cards) |
 | `showdownValue` | ValueRule[] | Overrides `value` at round end. First matching rule wins |
 
 `ValueRule`: `{ "if": Condition, "value": number | "highest" | "lowest" }`. Use `"highest"`
@@ -119,6 +124,8 @@ Options appear in the lobby. Rules refer to them with `{ "option": "<id>" }`.
   "roundSetup": [ ops ],
   "turn": [ ops ],
   "roundEnd": { "lastStanding": true },
+  "combos": [ { "name": "Pair", "size": 2, "match": "same", "ops": [ ops ] } ],
+  "reactions": { "seconds": { "option": "nopeSeconds" } },
   "showdown": { "tieBreak": { "option": "tieBreak" }, "stillTied": "allWin" },
   "scoring": { "roundWin": 1, "toWin": { "option": "tokensToWin" }, "tiedAtTarget": "decidingRound" },
   "rounds": { "first": "random", "next": "lastWinner" }
@@ -133,6 +140,8 @@ Options appear in the lobby. Rules refer to them with `{ "option": "<id>" }`.
 | `roundSetup` | Ops run at the start of every round, for the players in that round |
 | `turn` | Ops run for each turn. `self` is the active player |
 | `roundEnd.lastStanding` | End the round as soon as one player is left. Checked after every op |
+| `combos` | M7. Multi-card plays. `match`: `same` (all one card id) or `distinct` (all different). Playing them runs `ops` instead of the cards' `onPlay` (`onDiscard` still fires) |
+| `reactions.seconds` | M7. How long a reaction window stays open, 1 to 60 seconds or a number option. Only used when the deck has `onReact` cards. Each reaction restarts the window, and it always runs its full length, so it never tells who holds a reaction |
 | `showdown` | How the round is decided when `endRound` runs with `by: "showdown"`. Highest effective value wins. `tieBreak`: `highestPlayed`, `sumPlayed` or `none`. `stillTied`: `allWin` |
 | `scoring.roundWin` | Tokens for each round winner |
 | `scoring.toWin` | Tokens needed to win the game. Fixed when the game starts |
@@ -152,6 +161,7 @@ Inside ops, these strings point at players, zones and values.
 | `all` | Every player still in, including self |
 | `others` | Every player still in, except self |
 | `$name` | A player or list of players stored earlier with `as` |
+| `$card` | Inside a card hook: the card itself (its uid) |
 
 **Zones**: shared zone ids (`deck`, `setAside`, ...) or player zones `hand:<player>` and
 `played:<player>`, for example `hand:self`, `hand:$t`, `hand:$group`.
@@ -170,9 +180,9 @@ the current effect is skipped. The card still counts as played.
 
 | Op | Params | Status |
 |---|---|---|
-| `buildDeck` | `to` | M2. Puts every card of the merged pack into a zone, counts resolved for this round |
+| `buildDeck` | `to`, `only?`, `except?` (card ids) | M2. Puts every card of the merged pack into a zone, counts resolved for this round. M7: `only` or `except` pick some of them |
 | `shuffle` | `zone` | M2. Also clears knowledge and renews uids of the cards in it |
-| `move` | `from`, `to`, `count = 1` (or `all`), `faceUp?`, `at? = top / bottom / random / $var`, `card? = $var` | M2. Moves cards from the top of `from`, or one specific card. `from` may name several zones (`hand:$group`) |
+| `move` | `from`, `to`, `count = 1` (or `all`), `faceUp?`, `at? = top / bottom / random / $var`, `card? = $var`, `match?` (card id), `secret?` | M2. Moves cards from the top of `from`, or one specific card. `from` may name several zones (`hand:$group`). M7: `match` moves the first card with that id. `secret` leaves only the mover knowing where the card went |
 | `deal` | `from`, `to` (players), `count = 1` | M2. Deals one card at a time, round-robin |
 | `draw` | `who`, `count = 1`, `fallback?` (zone) | M2. From `deck` into the hand. Uses `fallback` when the deck is empty. Fires `onDraw` |
 
@@ -180,23 +190,23 @@ the current effect is skipped. The card still counts as played.
 
 | Op | Params | Status |
 |---|---|---|
-| `play` | `min`, `max` | M2. The active player plays cards from their hand. Fires `onDiscard`, then `onPlay` |
+| `play` | `min`, `max`, `repeat?`, `to? = played:self`, `pass?` (label) | M2. The active player plays cards from their hand. Fires `onDiscard`, then `onPlay`. M7: several cards must make a combo, `min: 0` lets the player pass (`pass` names that button, like "Draw a card"), `repeat` asks again until they pass, and with reaction cards in the deck each play waits out its reaction window first |
 | `endRound` | `by: showdown` | M2 |
-| `endTurn` | `draw?` | Future (Skip, Attack) |
-| `addTurns` | `who`, `count` | Future (Attack) |
+| `endTurn` | `all?` | M7. Ends the turn at once, skipping the rest of the turn's ops (Skip). `all` also drops extra turns owed |
+| `addTurns` | `who`, `count` | M7. The players take `count` turns in a row when their turn comes (Attack). Does not add up |
 | `reverse` | | Future (Reverse) |
 
 ### Choices (prompts)
 
 | Op | Params | Status |
 |---|---|---|
-| `choosePlayer` | `as`, `from`, `holding?` (card id), `auto?`, `includeProtected?` | M2. `auto` skips the prompt when exactly one player fits. Untargetable players are skipped unless `includeProtected` |
-| `selectPlayers` | `as`, `from`, `includeProtected?` | M2. No prompt. Stores every fitting player |
+| `choosePlayer` | `as`, `from`, `holding?` (card id), `withCards?`, `auto?`, `includeProtected?` | M2. `auto` skips the prompt when exactly one player fits. Untargetable players are skipped unless `includeProtected`. M7: `withCards` skips players with an empty hand |
+| `selectPlayers` | `as`, `from`, `withCards?`, `includeProtected?` | M2. No prompt. Stores every fitting player |
 | `guess` | `as`, `exclude?` (values) | M2. Pick a card value present in the merged deck. Logged for everyone |
-| `choosePosition` | `zone`, `as` | M2. 0 is the top |
+| `choosePosition` | `zone`, `as`, `insert?` | M2. 0 is the top. M7: `insert` adds the bottom, for a card going into the zone |
 | `confirm` | `as`, `text` | M2. Yes or no |
-| `chooseCard` | `as`, `from`, `by?` | Future (Favor: the target picks) |
-| `nameCard` | `as` | Future (three of a kind) |
+| `chooseCard` | `as`, `from` (zone), `by? = self`, `text?` | M7. `by` picks a card from the zone (Favor: the target picks from their own hand). Stores its uid. `text` replaces the prompt's "pick a card." and may use `{self}` |
+| `nameCard` | `as` | M7. Names a card id from this round's deck. Logged for everyone |
 
 ### Effects
 
@@ -211,8 +221,8 @@ the current effect is skipped. The card still counts as played.
 | `status` | `who`, `id`, `until` (`ownNextTurn`, `endOfTurn`, `endOfRound`, `permanent`) | M2 |
 | `if` | `cond`, `then`, `else?` | M2 |
 | `log` | `text`, `to? = all` | M2 |
-| `take` | `from`, `pick` (`random`, `giver`, `taker`, `$card`) | Future (Favor, cat pairs) |
-| `cancel` | `what: stackTop` | Future (Nope) |
+| `take` | `from`, `pick` (`random` or `$var`), `to? = hand:self` | M7. Moves one card: a random one, the uid from `chooseCard`, or the first card with the id from `nameCard`. A named card that is not there ends the effect |
+| `cancel` | `what: stackTop` | M7. Only in `onReact`. Cancels the play in the reaction window, or brings it back if it was canceled |
 | `reorder` | `zone`, `count` | Future (Alter the Future) |
 
 ## Conditions
@@ -225,6 +235,7 @@ the current effect is skipped. The card still counts as played.
 | `{ "is": "$name" }` | The variable is true |
 | `{ "in": "$name" }` | The player is still in the round |
 | `{ "handHasValue": ["$t", "$g"] }` | The player's hand holds a card with that value |
+| `{ "handHas": ["$t", "card-id"] }` | M7. The player's hand holds that card (or the card id in a variable) |
 | `{ "anyHandHas": "card-id" }` | Some player still in holds that card. Used at showdown |
 | `{ "not": C }`, `{ "all": [C] }`, `{ "any": [C] }` | Logic |
 

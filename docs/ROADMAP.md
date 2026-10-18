@@ -55,7 +55,7 @@ How: write the op unit tests from the card texts in `docs/rules/power-hungry-pet
 test per card at least. Build the simulation early, it finds most bugs.
 
 Done as `src/engine/rules.test.ts` (card by card) and `sim.test.ts` / `sim-litter.test.ts`
-(750 random games per `npm test`, with kicks and dropped connections; `SIM_GAMES=5000 npm test`
+(950 random games per `npm test` across the three sim files, with kicks and dropped connections; `SIM_GAMES=5000 npm test`
 for a deeper run). The host session runs the engine too: start, answers, next round, rematch,
 back to lobby, kick for the round, hand a seat to a new device, resume mid-prompt after reload.
 
@@ -100,11 +100,23 @@ Goal: play a full game with friends in tabs.
   the phone drawers, run in CI on pull requests.
 - [x] Protocol version check with an "update your page" view.
 
-## M7: Exploding Kittens (future work)
+## M7: Exploding Kittens (done, base game)
 
-- [ ] Paper test: write the base deck in the pack format before building anything. Every card
-  that cannot be written down shows a gap in the format.
-- [ ] Ops: `endTurn`, `addTurns`, `reverse`, `chooseCard`, `nameCard`, `take`, `cancel`,
-  `reorder`, `onDraw` hook.
-- [ ] Multi-card plays and combos.
-- [ ] Reaction window with deadline (Nope), always full length.
+- [x] Paper test: write the base deck in the pack format before building anything. Every card
+  that cannot be written down shows a gap in the format. (The gaps became `onDraw`, `onReact`,
+  `comboOnly`, `rules.combos`, `rules.reactions`, the `handHas` condition, and `buildDeck`
+  `only`/`except` for the Defuse and kitten setup.)
+- [x] Ops: `endTurn`, `addTurns`, `chooseCard`, `nameCard`, `take`, `cancel`, `onDraw` hook.
+  `reverse` and `reorder` wait for the expansions that need them (Reverse, Alter the Future).
+- [x] Multi-card plays and combos (pair, three of a kind, five different).
+- [x] Reaction window with deadline (Nope), always full length. The host times it; each
+  reaction restarts it; a host reload mid-window resumes it.
+- [x] Table UI: pick several cards for a combo, the window banner with its timer bar and a
+  Nope button, cards to pick from (Favor, five different), compact piles for big hands.
+
+Done as `src/engine/kittens.test.ts` (card by card and combo by combo), `sim-kittens.test.ts`
+(random games for 2 to 5 players with combos and random Nopes), `src/session/reactions.test.ts`
+(timers through the host session) and `e2e/kittens.e2e.ts`.
+
+Next: expansion cards (Reverse, Alter the Future, Draw from the Bottom) as an addon, once
+someone wants them.

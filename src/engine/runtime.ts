@@ -14,10 +14,12 @@ export interface Rt {
   defs: Map<string, CardDef>;
   /** Effect aborts during this call. Setup checks use it to spot a deck that is too small. */
   aborts: number;
+  /** Host clock in ms, passed in with the input. Only reaction windows use it. */
+  now: number;
 }
 
-export function makeRt(pack: Pack, s: GameState): Rt {
-  return { pack, s, defs: new Map(pack.cards.map((c) => [c.id, c])), aborts: 0 };
+export function makeRt(pack: Pack, s: GameState, now = 0): Rt {
+  return { pack, s, defs: new Map(pack.cards.map((c) => [c.id, c])), aborts: 0, now };
 }
 
 const LOG_LIMIT = 200;
@@ -270,6 +272,7 @@ export function interpolate(rt: Rt, text: string): string {
     const seats = seatsIn(value);
     if (seats.length) return names(rt, seats);
     if (typeof value === 'string' && rt.s.cards[value]) return cardName(rt, value);
+    if (typeof value === 'string' && rt.defs.has(value)) return rt.defs.get(value)!.name;
     if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') return String(value);
     return whole;
   });

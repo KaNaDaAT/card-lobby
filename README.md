@@ -4,11 +4,13 @@ Card games with friends, right in the browser. One person creates a lobby, the o
 link or code, everyone chats and plays. Peer to peer and encrypted, no accounts, no game server.
 
 Games are data packs: a `pack.json` with cards and rules, plus images. Addons work like DLC and
-can add, remove or change cards and rules. The first game is Power Hungry Pets.
+can add, remove or change cards and rules. Two games ship with it: Power Hungry Pets and
+Exploding Kittens.
 
-**Status:** playable and deployable (milestones 1 to 6). Create a lobby, invite friends, chat, and play full
-games of Power Hungry Pets, with rematches, reconnects and host reloads mid-game. Hosts can
-upload their own packs as a .zip, and players accept them before they download. See
+**Status:** playable and deployable (milestones 1 to 7). Create a lobby, invite friends, chat,
+and play full games of Power Hungry Pets or Exploding Kittens (combos and a timed Nope window
+included), with rematches, reconnects and host reloads mid-game. Hosts can upload their own
+packs as a .zip, and players accept them before they download. See
 [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Run it
@@ -31,7 +33,7 @@ needs no network:
 2. Copy the link (it keeps local mode) and open it in another tab with `&as=2` added, so that
    tab is a second player. `&as=3` for a third, and so on.
 
-Other scripts: `npm test` (unit tests plus 750 simulated games; `SIM_GAMES=5000 npm test` for
+Other scripts: `npm test` (unit tests plus 950 simulated games; `SIM_GAMES=5000 npm test` for
 more), `npm run e2e` (browser tests against the production build; run
 `npx playwright install chromium` once first), `npm run check` (type-check), `npm run build`
 (static files in `dist/`).
@@ -50,19 +52,21 @@ an account meant for your group.
 
 ## Make your own pack
 
-Copy `public/packs/power-hungry-pets`, change `pack.json` and the art, zip the folder, and pick
-the zip with the Custom pack tile in the lobby. The lobby lists any problems with their file and
-path. [docs/PACK_FORMAT.md](docs/PACK_FORMAT.md) describes every field and op.
+Copy `public/packs/power-hungry-pets` (or `exploding-kittens` for a draw-and-react game),
+change `pack.json` and the art, zip the folder, and pick the zip with the Custom pack tile in
+the lobby. The lobby lists any problems with their file and path. [docs/PACK_FORMAT.md](docs/PACK_FORMAT.md) describes every field and op.
 
 ## Docs
 
 - [docs/DESIGN.md](docs/DESIGN.md): architecture, networking, engine, disconnects, custom packs
 - [docs/PACK_FORMAT.md](docs/PACK_FORMAT.md): how to write a pack or an addon
 - [docs/ROADMAP.md](docs/ROADMAP.md): milestones and what is done
-- [docs/rules/power-hungry-pets.md](docs/rules/power-hungry-pets.md): rules as implemented,
+- [docs/rules/power-hungry-pets.md](docs/rules/power-hungry-pets.md) and
+  [docs/rules/exploding-kittens.md](docs/rules/exploding-kittens.md): rules as implemented,
   including house rules
 
 ## Credits
 
-Power Hungry Pets is a game by Exploding Kittens. This project implements its rules for private
-play among friends. The card art here is original and only loosely inspired by the game.
+Power Hungry Pets and Exploding Kittens are games by Exploding Kittens. This project
+implements their rules for private play among friends. The card art here is original and only
+loosely inspired by the games.

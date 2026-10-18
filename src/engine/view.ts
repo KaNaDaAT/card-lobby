@@ -15,8 +15,10 @@ export function knows(s: GameState, seat: Seat | null, card: CardInstance, zone:
   return card.knownBy.includes(seat);
 }
 
-export function viewFor(s: GameState, seat: Seat | null): GameView {
+/** `now` is the host clock, for the time left in a reaction window. */
+export function viewFor(s: GameState, seat: Seat | null, now = 0): GameView {
   const you = seat !== null && s.players[seat] ? seat : null;
+  const window = s.stack.at(-1);
   const visible = (uid: string): VisibleCard => ({ uid, cardId: s.cards[uid]!.cardId });
   const zoneView = (zone: Zone | undefined): ZoneView => ({
     count: zone?.cards.length ?? 0,
@@ -51,6 +53,20 @@ export function viewFor(s: GameState, seat: Seat | null): GameView {
     zones,
     prompt: s.prompt && s.prompt.to === you ? structuredClone(s.prompt) : null,
     waiting: s.prompt ? { seat: s.prompt.to, kind: s.prompt.kind } : null,
+    window: window
+      ? {
+          seat: window.seat,
+          cards: window.cards.map(visible),
+          remainingMs: Math.max(0, window.endsAt - now),
+          canceled: window.canceled,
+          reactions: window.reactions,
+        }
+      : null,
+    // Only about your own hand: others must not learn who could react.
+    reactWith:
+      window && you !== null && s.players[you]!.round === 'in'
+        ? (s.zones[`hand:${you}`]?.cards ?? []).filter((uid) => s.reactCards.includes(s.cards[uid]!.cardId))
+        : [],
     log: s.log
       .filter((e) => e.to === 'all' || (you !== null && e.to.includes(you)))
       .slice(-LOG_VIEW)

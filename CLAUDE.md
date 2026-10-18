@@ -1,7 +1,8 @@
 # Card Lobby
 
 Static website where friends create or join a lobby, chat, and play card games peer to peer.
-Games and their addons are data packs (JSON plus images). First game: Power Hungry Pets.
+Games and their addons are data packs (JSON plus images). Games: Power Hungry Pets and
+Exploding Kittens.
 
 Read [docs/DESIGN.md](docs/DESIGN.md) before changing architecture, and
 [docs/PACK_FORMAT.md](docs/PACK_FORMAT.md) before touching packs or engine ops.
@@ -11,7 +12,7 @@ Read [docs/DESIGN.md](docs/DESIGN.md) before changing architecture, and
 
 - `npm run dev` starts Vite on http://localhost:5173
 - `npm run check` type-checks
-- `npm test` runs Vitest once, including 750 simulated games (`SIM_GAMES=5000 npm test` for more)
+- `npm test` runs Vitest once, including 950 simulated games (`SIM_GAMES=5000 npm test` for more)
 - `npm run build` type-checks and builds static files into `dist/`
 - `npm run e2e` runs the Playwright browser tests in `e2e/` against the production build
   (`npx playwright install chromium` once per machine)
@@ -41,9 +42,12 @@ network, no clock, seeded RNG, plain-JSON state. Only the host runs it.
   including mid-effect while waiting for a prompt.
 - `viewFor(state, seat)` must never include a hidden card the seat does not know.
   Simulation tests assert this.
-- Rules decisions for Power Hungry Pets live in
-  [docs/rules/power-hungry-pets.md](docs/rules/power-hungry-pets.md). Change that file
-  together with the pack.
+- Rules decisions for each game live in `docs/rules/`:
+  [power-hungry-pets.md](docs/rules/power-hungry-pets.md) and
+  [exploding-kittens.md](docs/rules/exploding-kittens.md). Change the file together with its
+  pack.
+- Reaction windows are timed by the host's clock only. The engine gets `now` with inputs and
+  never reads a clock itself.
 
 ## Layout
 

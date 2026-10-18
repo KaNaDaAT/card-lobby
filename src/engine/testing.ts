@@ -4,6 +4,7 @@
  */
 import petsJson from '../../public/packs/power-hungry-pets/pack.json';
 import bigLitterJson from '../../public/packs/power-hungry-pets/addons/big-litter.json';
+import kittensJson from '../../public/packs/exploding-kittens/pack.json';
 import { mergeAddons } from '../packs/merge';
 import type { Addon, OptionValue, Pack } from '../packs/types';
 import { apply, startGame, viewFor } from './index';
@@ -11,6 +12,7 @@ import type { GameState, GameView, Input, Seat } from './types';
 
 export const petsBase = petsJson as unknown as Pack;
 export const bigLitter = bigLitterJson as unknown as Addon;
+export const kittens = kittensJson as unknown as Pack;
 
 export function petsPack(addons: string[] = []): Pack {
   return mergeAddons(petsBase, [bigLitter], addons);
@@ -29,6 +31,8 @@ export function newGame(pack: Pack, players: number, seed = 1, options: Record<s
 
 export class Table {
   s: GameState;
+  /** The host clock passed with inputs, for reaction windows. */
+  now = 0;
   private locked = new Set<string>();
 
   constructor(
@@ -71,16 +75,49 @@ export class Table {
   answer(value: unknown): void {
     const p = this.s.prompt;
     if (!p) throw new Error('no open prompt');
-    this.input({ kind: 'answer', seat: p.to, promptId: p.id, value });
+    this.input({ kind: 'answer', seat: p.to, promptId: p.id, value, now: this.now });
   }
 
   /** The active player plays the first card in hand with this id. */
   play(cardId: string): void {
+    this.playCards([cardId]);
+  }
+
+  /** The active player plays these cards together, picked by id from their hand. */
+  playCards(cardIds: string[]): void {
+    this.answer(this.uidsFor(cardIds));
+  }
+
+  /** The uids a play of these card ids would send, without sending it. */
+  uidsFor(cardIds: string[]): string[] {
     const p = this.s.prompt;
     if (p?.kind !== 'play') throw new Error(`expected a play prompt, got ${p?.kind ?? 'none'}`);
-    const uid = p.choices.find((u) => this.s.cards[u]!.cardId === cardId);
-    if (!uid) throw new Error(`${cardId} is not in hand (${this.cardIds(`hand:${p.to}`).join(', ')})`);
-    this.answer([uid]);
+    const left = [...p.choices];
+    return cardIds.map((cardId) => {
+      const i = left.findIndex((u) => this.s.cards[u]!.cardId === cardId);
+      if (i < 0) throw new Error(`${cardId} is not in hand (${this.cardIds(`hand:${p.to}`).join(', ')})`);
+      return left.splice(i, 1)[0]!;
+    });
+  }
+
+  /** The active player plays nothing more this turn. */
+  pass(): void {
+    this.answer([]);
+  }
+
+  /** A player reacts to the open window with the first card of this id in their hand. */
+  react(seat: Seat, cardId: string): void {
+    const uid = this.s.zones[`hand:${seat}`]!.cards.find((u) => this.s.cards[u]!.cardId === cardId);
+    if (!uid) throw new Error(`${cardId} is not in ${seat}'s hand`);
+    this.input({ kind: 'react', seat, uid, now: this.now });
+  }
+
+  /** Lets the open reaction window run out. */
+  closeWindow(): void {
+    const window = this.s.stack.at(-1);
+    if (!window) throw new Error('no reaction window is open');
+    this.now = window.endsAt;
+    this.input({ kind: 'timeout', now: this.now });
   }
 
   cardIds(zone: string): string[] {
@@ -100,6 +137,11 @@ export class Table {
       other.cardId = this.s.cards[uid]!.cardId;
       this.s.cards[uid]!.cardId = want;
     });
+    // An open play prompt lists which cards may go alone. The identities just changed.
+    const p = this.s.prompt;
+    if (p?.kind === 'play') {
+      p.alone = p.choices.filter((u) => !this.pack.cards.find((c) => c.id === this.s.cards[u]!.cardId)?.comboOnly);
+    }
   }
 
   /** Moves a free copy of `cardId` from the deck into `zone`, face up if the zone is public. */

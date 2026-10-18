@@ -496,7 +496,8 @@ describe('inputs and views', () => {
     expect(t.try({ kind: 'answer', seat: me!, promptId: 'p0', value: [] })).toBe('That question is no longer open.');
     expect(t.try({ kind: 'answer', seat: me!, promptId: p.id, value: ['nope'] })).toBe('That answer is not allowed.');
     expect(t.try({ kind: 'answer', seat: me!, promptId: p.id, value: [] })).toBe('That answer is not allowed.');
-    expect(t.try({ kind: 'timeout', promptId: p.id, now: 0 })).toBe('Time limits are not supported yet.');
+    expect(t.try({ kind: 'timeout', now: 0 })).toBe('No reaction window is open.');
+    expect(t.try({ kind: 'react', seat: me!, uid: p.kind === 'play' ? p.choices[0]! : '', now: 0 })).toBe('There is nothing to react to.');
   });
 
   it('never changes the state it was given', () => {

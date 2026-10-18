@@ -58,7 +58,7 @@ export function createGame(pack: Pack, game: NewGame): GameState {
       statuses: [],
       connected: true,
     })),
-    turn: { seat: 0, direction: 1, owed: 0, count: 0 },
+    turn: { seat: 0, direction: 1, owed: game.players.map(() => 0), count: 0 },
     starter: 0,
     cards: {},
     zones: {},
@@ -69,6 +69,7 @@ export function createGame(pack: Pack, game: NewGame): GameState {
     deciding: null,
     result: null,
     winners: [],
+    reactCards: pack.cards.filter((c) => c.onReact?.length).map((c) => c.id),
     nextId: 0,
     rng: seedRng(game.seed),
     log: [],
@@ -123,7 +124,7 @@ export function startRound(rt: Rt): void {
     p.statuses = [];
   }
   s.starter = pickStarter(rt, seats);
-  s.turn = { seat: s.starter, direction: 1, owed: 0, count: 0 };
+  s.turn = { seat: s.starter, direction: 1, owed: s.players.map(() => 0), count: 0 };
 
   log(rt, s.deciding ? `Deciding round: ${names(rt, seats)}.` : `Round ${s.round}.`);
   const sitting = s.players.filter((p) => p.round === 'sittingOut' && pool.includes(p.seat)).map((p) => p.seat);
@@ -159,7 +160,15 @@ export function nextTurn(rt: Rt): void {
     seat = isIn(rt, s.starter) ? s.starter : nextIn(rt, s.starter);
   } else {
     for (const p of s.players) p.statuses = p.statuses.filter((st) => st.until !== 'endOfTurn');
-    seat = nextIn(rt, s.turn.seat) ?? (isIn(rt, s.turn.seat) ? s.turn.seat : null);
+    const current = s.turn.seat;
+    if (isIn(rt, current) && (s.turn.owed[current] ?? 0) > 0) {
+      // Extra turns owed (Attack): the same player goes again.
+      s.turn.owed[current]!--;
+      seat = current;
+      log(rt, `${nameOf(rt, current)} takes another turn.`);
+    } else {
+      seat = nextIn(rt, current) ?? (isIn(rt, current) ? current : null);
+    }
   }
   if (seat === null) {
     endRound(rt, 'nobodyLeft', []);
