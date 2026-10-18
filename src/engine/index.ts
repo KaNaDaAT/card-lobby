@@ -11,6 +11,7 @@ import { cardName, defOf, EngineError, handOf, isIn, log, makeRt, moveCard, name
 import type { GameState, Input, Json, Prompt } from './types';
 
 export { viewFor } from './view';
+export { showdownScore } from './round';
 export type { NewGame } from './round';
 
 export interface Result {

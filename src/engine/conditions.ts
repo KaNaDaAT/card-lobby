@@ -27,6 +27,7 @@ export function evalCond(rt: Rt, cond: Condition): boolean {
   if ('anyHandHas' in cond) {
     return inRound(rt).some((seat) => handOf(rt, seat).cards.some((uid) => rt.s.cards[uid]?.cardId === cond.anyHandHas));
   }
+  if ('flag' in cond) return (rt.s.flags ?? []).includes(cond.flag);
   if ('not' in cond) return !evalCond(rt, cond.not);
   if ('all' in cond) return cond.all.every((c) => evalCond(rt, c));
   if ('any' in cond) return cond.any.some((c) => evalCond(rt, c));

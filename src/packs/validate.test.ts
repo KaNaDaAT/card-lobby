@@ -147,6 +147,35 @@ describe('validatePack', () => {
     ]);
   });
 
+  it('checks round flags, value labels and the ops that use them', () => {
+    const p = petsWith((p) => {
+      p.rules.flags = { upsideDown: { label: 'Upside down' }, 'bad-id': { label: '' } };
+      p.rules.showdown = { ...p.rules.showdown, lowestWins: { flag: 'sideways' } };
+      card(p, 'mouse-trapper').onPlay = [
+        { op: 'flag', id: 'upsideDown', to: 'maybe' },
+        { op: 'flag', id: 'nope' },
+        { op: 'passHands', who: 'all', direction: 'left' },
+        { op: 'choosePlayer', as: 'a', from: 'others', except: '$b' },
+      ];
+      card(p, 'king-cat').valueLabel = 'many';
+      card(p, 'crystal-bowl').value = undefined;
+      card(p, 'crystal-bowl').valueLabel = '1';
+    });
+    expect(validatePack(p)).toEqual(
+      expect.arrayContaining([
+        'pack.json: rules.flags.bad-id: flag ids are letters, digits and underscores',
+        'pack.json: rules.flags.bad-id.label: missing',
+        'pack.json: rules.showdown.lowestWins.flag: no flag "sideways" in rules.flags',
+        'pack.json: cards.mouse-trapper.onPlay[0].to: expected true, false or "toggle"',
+        'pack.json: cards.mouse-trapper.onPlay[1].id: no flag "nope" in rules.flags',
+        'pack.json: cards.mouse-trapper.onPlay[2].direction: expected next or previous',
+        'pack.json: cards.mouse-trapper.onPlay[3].except: variable "$b" is not set by an earlier op',
+        'pack.json: cards.king-cat.valueLabel: expected 1 to 3 characters',
+        'pack.json: cards.crystal-bowl.valueLabel: needs a value to label',
+      ]),
+    );
+  });
+
   it('survives garbage', () => {
     expect(validatePack(null)).toEqual(['pack.json: expected an object']);
     expect(validatePack({ format: 1 }).length).toBeGreaterThan(3);

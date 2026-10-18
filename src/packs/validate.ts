@@ -297,6 +297,15 @@ class PackChecker {
       }
     }
 
+    if (r.flags !== undefined) {
+      if (!isObj(r.flags)) this.err('rules.flags', 'expected an object');
+      else for (const [id, f] of Object.entries(r.flags)) {
+        if (!VAR.test(id)) this.err(`rules.flags.${id}`, 'flag ids are letters, digits and underscores');
+        if (!isObj(f) || !isStr(f.label) || !f.label.trim()) this.err(`rules.flags.${id}.label`, 'missing');
+        else if (f.text !== undefined && !isStr(f.text)) this.err(`rules.flags.${id}.text`, 'expected text');
+      }
+    }
+
     this.checkOps(r.roundSetup, 'rules.roundSetup', { vars: new Set(), noAsk: 'roundSetup' });
     if (!Array.isArray(r.turn) || !r.turn.length) this.err('rules.turn', 'expected a non-empty list of ops');
     else this.checkOps(r.turn, 'rules.turn', { vars: new Set() });
@@ -329,6 +338,7 @@ class PackChecker {
           this.err('rules.showdown.tieBreak', `expected ${tieBreaks.join(', ')} or an option`);
         }
         if (r.showdown.stillTied !== undefined && r.showdown.stillTied !== 'allWin') this.err('rules.showdown.stillTied', 'expected allWin');
+        if (r.showdown.lowestWins !== undefined) this.checkCond(r.showdown.lowestWins, 'rules.showdown.lowestWins', { vars: new Set() });
       }
     }
 
@@ -358,7 +368,7 @@ class PackChecker {
   }
 
   private checkCards(cards: unknown[], counts: number[]): void {
-    const known = ['id', 'name', 'value', 'count', 'text', 'image', 'tags', 'onPlay', 'onDiscard', 'onDraw', 'onReact', 'comboOnly', 'showdownValue'];
+    const known = ['id', 'name', 'value', 'valueLabel', 'count', 'text', 'image', 'tags', 'onPlay', 'onDiscard', 'onDraw', 'onReact', 'comboOnly', 'showdownValue'];
     const seen = new Set<string>();
     cards.forEach((raw, i) => {
       if (!isObj(raw) || !isStr(raw.id) || !raw.id) return this.err(`cards[${i}]`, 'expected a card with an id');
@@ -369,6 +379,10 @@ class PackChecker {
       if (!isStr(raw.name) || !raw.name.trim()) this.err(`${at}.name`, 'missing');
       if (!isStr(raw.text)) this.err(`${at}.text`, 'missing');
       if (raw.value !== undefined && !Number.isFinite(raw.value)) this.err(`${at}.value`, 'expected a number');
+      if (raw.valueLabel !== undefined) {
+        if (!isStr(raw.valueLabel) || !raw.valueLabel.trim() || raw.valueLabel.length > 3) this.err(`${at}.valueLabel`, 'expected 1 to 3 characters');
+        else if (raw.value === undefined) this.err(`${at}.valueLabel`, 'needs a value to label');
+      }
       this.checkCount(raw.count, `${at}.count`, counts);
       if (raw.image !== undefined) checkImage(raw.image, `${at}.image`, (a, m) => this.err(a, m), this.opts.files);
       if (raw.tags !== undefined && !(Array.isArray(raw.tags) && raw.tags.every(isStr))) this.err(`${at}.tags`, 'expected a list of words');
@@ -551,6 +565,15 @@ class PackChecker {
       case 'what':
         if (v !== 'stackTop') this.err(path, 'expected stackTop');
         return;
+      case 'flag':
+        if (!isStr(v) || !isObj(this.pack.rules.flags) || !Object.hasOwn(this.pack.rules.flags, v)) this.err(path, `no flag "${String(v)}" in rules.flags`);
+        return;
+      case 'flagTo':
+        if (v !== true && v !== false && v !== 'toggle') this.err(path, 'expected true, false or "toggle"');
+        return;
+      case 'direction':
+        if (v !== 'next' && v !== 'previous') this.err(path, 'expected next or previous');
+        return;
       case 'as':
         return;
     }
@@ -588,6 +611,9 @@ class PackChecker {
         return;
       case 'anyHandHas':
         if (!isStr(v) || !this.cardIds.has(v)) this.err(`${path}.anyHandHas`, `no card "${String(v)}"`);
+        return;
+      case 'flag':
+        if (!isStr(v) || !isObj(this.pack.rules.flags) || !Object.hasOwn(this.pack.rules.flags, v)) this.err(`${path}.flag`, `no flag "${String(v)}" in rules.flags`);
         return;
       case 'not':
         return this.checkCond(v, `${path}.not`, scope);

@@ -1,4 +1,4 @@
-import type { CardDef, LoadedPack } from '../../packs/types';
+import { valueText, type CardDef, type LoadedPack } from '../../packs/types';
 import { h } from '../dom';
 
 export interface CardOpts {
@@ -31,12 +31,12 @@ function classes(base: string, opts: CardOpts): string {
 export function cardFace(lp: LoadedPack, card: CardDef, opts: CardOpts = {}): HTMLElement {
   const parts = [
     card.image ? h('img', { src: lp.asset(card.image), alt: '', loading: 'lazy', draggable: 'false' }) : null,
-    card.value !== undefined ? h('span', { class: 'card-value' }, card.value) : null,
+    card.value !== undefined ? h('span', { class: 'card-value' }, valueText(card)) : null,
     opts.count !== undefined && opts.count > 1 ? h('span', { class: 'card-count' }, `x${opts.count}`) : null,
     opts.note ? h('span', { class: 'card-note' }, opts.note) : null,
     h('span', { class: 'card-name' }, card.name),
   ];
-  const label = `${card.name}${card.value !== undefined ? ` (${card.value})` : ''}: ${card.text}`;
+  const label = `${card.name}${card.value !== undefined ? ` (${valueText(card)})` : ''}: ${card.text}`;
   if (opts.onClick) {
     return h('button', { type: 'button', class: classes('card card-button', opts), title: label, 'aria-label': label, disabled: opts.disabled, onclick: opts.onClick }, parts);
   }
@@ -66,14 +66,14 @@ export function showCard(lp: LoadedPack, card: CardDef): void {
       { class: 'card-dialog-body' },
       h('div', { class: 'card card-xl' }, [
         card.image ? h('img', { src: lp.asset(card.image), alt: '', draggable: 'false' }) : null,
-        card.value !== undefined ? h('span', { class: 'card-value' }, card.value) : null,
+        card.value !== undefined ? h('span', { class: 'card-value' }, valueText(card)) : null,
         h('span', { class: 'card-name' }, card.name),
       ]),
       h(
         'div',
         { class: 'card-dialog-text' },
         h('h2', null, card.name),
-        card.value !== undefined ? h('p', { class: 'muted' }, `Value ${card.value}`) : null,
+        card.value !== undefined ? h('p', { class: 'muted' }, `Value ${valueText(card)}`) : null,
         h('p', null, card.text),
         // A plain button: the page's CSP (form-action 'none') may block <form method="dialog">.
         h('button', { type: 'button', class: 'btn', autofocus: true, onclick: () => dialog.close() }, 'Close'),

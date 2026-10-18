@@ -1,0 +1,131 @@
+{
+  "format": 1,
+  "id": "second-litter",
+  "name": "Second Litter",
+  "description": "One new pet for each number from 1 to 8, with a different action of about the same strength and risk. House design, balance untested.",
+  "image": "art/addon-second-litter.svg",
+  "requires": [],
+  "conflicts": [],
+  "cards": {
+    "add": [
+      {
+        "id": "gossip-parrot",
+        "name": "Gossip Parrot",
+        "value": 1,
+        "count": 1,
+        "image": "art/gossip-parrot.svg",
+        "text": "Choose another player. They show their card to everyone.",
+        "onPlay": [
+          { "op": "choosePlayer", "as": "t", "from": "others" },
+          { "op": "reveal", "zone": "hand:$t", "to": "all" }
+        ]
+      },
+      {
+        "id": "nosy-ferret",
+        "name": "Nosy Ferret",
+        "value": 2,
+        "count": 1,
+        "image": "art/nosy-ferret.svg",
+        "text": "Choose another player and secretly look at their card.",
+        "onPlay": [
+          { "op": "choosePlayer", "as": "t", "from": "others" },
+          { "op": "reveal", "zone": "hand:$t", "to": "self" }
+        ]
+      },
+      {
+        "id": "pillow-fight-panda",
+        "name": "Pillow-Fight Panda",
+        "value": 3,
+        "count": 1,
+        "image": "art/pillow-fight-panda.svg",
+        "text": "Choose another player. You both put your card face up without its action and draw a new one.",
+        "onPlay": [
+          { "op": "choosePlayer", "as": "t", "from": "others" },
+          { "op": "discard", "who": "self" },
+          { "op": "discard", "who": "$t" },
+          { "op": "if", "cond": { "in": "self" }, "then": [{ "op": "draw", "who": "self", "fallback": "setAside" }] },
+          { "op": "if", "cond": { "in": "$t" }, "then": [{ "op": "draw", "who": "$t", "fallback": "setAside" }] }
+        ]
+      },
+      {
+        "id": "tunnel-mole",
+        "name": "Tunnel Mole",
+        "value": 4,
+        "count": 1,
+        "image": "art/tunnel-mole.svg",
+        "text": "Put your card face down at the bottom of the draw pile and draw a new one.",
+        "onPlay": [
+          { "op": "move", "from": "hand:self", "to": "deck", "at": "bottom" },
+          { "op": "log", "text": "{self} buries their card at the bottom of the draw pile." },
+          { "op": "draw", "who": "self" }
+        ]
+      },
+      {
+        "id": "swapsie-squirrel",
+        "name": "Swapsie Squirrel",
+        "value": 5,
+        "count": 1,
+        "image": "art/swapsie-squirrel.svg",
+        "text": "Choose two other players. They trade cards. Does nothing with only two players.",
+        "onPlay": [
+          { "op": "choosePlayer", "as": "a", "from": "others" },
+          { "op": "choosePlayer", "as": "b", "from": "others", "except": "$a" },
+          { "op": "swap", "a": "hand:$a", "b": "hand:$b" }
+        ]
+      },
+      {
+        "id": "treasure-magpie",
+        "name": "Treasure Magpie",
+        "value": 6,
+        "count": 1,
+        "image": "art/treasure-magpie.svg",
+        "text": "Look at the top card of the draw pile. You may swap it with your card.",
+        "onPlay": [
+          { "op": "peek", "zone": "deck", "count": 1, "as": "top" },
+          { "op": "confirm", "as": "swap", "text": "Swap your card with the top card of the draw pile?" },
+          {
+            "op": "if",
+            "cond": { "is": "$swap" },
+            "then": [
+              { "op": "move", "from": "hand:self", "to": "deck", "at": "top" },
+              { "op": "move", "card": "$top", "from": "deck", "to": "hand:self" },
+              { "op": "log", "text": "{self} swaps their card with the top card of the draw pile." }
+            ],
+            "else": [{ "op": "log", "text": "{self} leaves the draw pile as it is." }]
+          }
+        ]
+      },
+      {
+        "id": "penguin-parade",
+        "name": "Penguin Parade",
+        "value": 7,
+        "count": 1,
+        "image": "art/penguin-parade.svg",
+        "text": "Everyone still in, you included, passes their card to the next player.",
+        "onPlay": [
+          { "op": "selectPlayers", "as": "group", "from": "all" },
+          { "op": "passHands", "who": "$group" }
+        ]
+      },
+      {
+        "id": "haggling-hamster",
+        "name": "Haggling Hamster",
+        "value": 8,
+        "count": 1,
+        "image": "art/haggling-hamster.svg",
+        "text": "Choose another player and look at their card. You may trade cards with them.",
+        "onPlay": [
+          { "op": "choosePlayer", "as": "t", "from": "others" },
+          { "op": "reveal", "zone": "hand:$t", "to": "self" },
+          { "op": "confirm", "as": "trade", "text": "Trade cards with {$t}?" },
+          {
+            "op": "if",
+            "cond": { "is": "$trade" },
+            "then": [{ "op": "swap", "a": "hand:self", "b": "hand:$t" }],
+            "else": [{ "op": "log", "text": "{self} keeps their card." }]
+          }
+        ]
+      }
+    ]
+  }
+}

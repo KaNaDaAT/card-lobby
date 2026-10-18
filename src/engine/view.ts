@@ -67,6 +67,7 @@ export function viewFor(s: GameState, seat: Seat | null, now = 0): GameView {
       window && you !== null && s.players[you]!.round === 'in'
         ? (s.zones[`hand:${you}`]?.cards ?? []).filter((uid) => s.reactCards.includes(s.cards[uid]!.cardId))
         : [],
+    flags: [...(s.flags ?? [])],
     log: s.log
       .filter((e) => e.to === 'all' || (you !== null && e.to.includes(you)))
       .slice(-LOG_VIEW)

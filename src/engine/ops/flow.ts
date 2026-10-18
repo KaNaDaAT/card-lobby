@@ -1,4 +1,4 @@
-/** Turn flow and control: play, endRound, endTurn, addTurns, cancel, if, log. */
+/** Turn flow and control: play, endRound, endTurn, addTurns, cancel, flag, if, log. */
 import { resolveCount } from '../../packs/count';
 import type { CardDef, ComboDef, Condition, Op } from '../../packs/types';
 import { evalCond } from '../conditions';
@@ -175,6 +175,22 @@ export const cancel: OpDef = {
     top.canceled = !top.canceled;
     const what = `${nameOf(rt, top.seat)}'s ${top.cards.map((uid) => cardName(rt, uid)).join(' and ')}`;
     log(rt, top.canceled ? `${what} is stopped.` : `${what} is back on.`);
+    return 'next';
+  },
+};
+
+/** Turns a round flag on or off, or flips it. Flags are public and clear when a round starts. */
+export const flag: OpDef = {
+  status: 'ready',
+  params: { id: 'flag', to: 'flagTo' },
+  required: ['id'],
+  run(rt, op) {
+    const id = String(op.id);
+    const flags = (rt.s.flags ??= []);
+    const on = flags.includes(id);
+    const want = op.to === 'toggle' ? !on : op.to !== false;
+    if (want && !on) flags.push(id);
+    if (!want && on) flags.splice(flags.indexOf(id), 1);
     return 'next';
   },
 };

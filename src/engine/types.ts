@@ -140,6 +140,8 @@ export interface RoundResult {
   showdown?: { seat: Seat; cardId: string; value: ShowdownValue }[];
   /** Set when the showdown needed the tie-break. */
   tieBreak?: { rule: TieBreak; scores: { seat: Seat; score: number }[] };
+  /** Set when the lowest card won the showdown. */
+  lowestWins?: true;
 }
 
 export type TieBreak = 'highestPlayed' | 'sumPlayed' | 'none';
@@ -174,6 +176,8 @@ export interface GameState {
   winners: Seat[];
   /** Card ids that can react (have onReact), so views can tell players what they could react with. */
   reactCards: string[];
+  /** Round flags that are on, in the order they were set. Cleared when a round starts. */
+  flags: string[];
   /** Counter for card uids and prompt ids. */
   nextId: number;
   rng: number[];
@@ -235,6 +239,8 @@ export interface GameView {
   window: { seat: Seat; cards: VisibleCard[]; remainingMs: number; canceled: boolean; reactions: number } | null;
   /** Cards in your hand you could react with now. Only ever about your own hand. */
   reactWith: string[];
+  /** Round flags that are on. Public. */
+  flags: string[];
   log: { text: string; private: boolean }[];
   result: RoundResult | null;
   winners: Seat[];

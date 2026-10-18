@@ -1,4 +1,4 @@
-/** Effects: peek, reveal, swap, discard, compareHands, eliminate, status, take. */
+/** Effects: peek, reveal, swap, passHands, discard, compareHands, eliminate, status, take. */
 import { randInt } from '../rng';
 import {
   allSeats,
@@ -87,6 +87,38 @@ export const swap: OpDef = {
     log(rt, swapText(rt, a, b));
     if (a.owner !== undefined) log(rt, `You got ${cardList(rt, fromB)}.`, [a.owner]);
     if (b.owner !== undefined) log(rt, `You got ${cardList(rt, fromA)}.`, [b.owner]);
+    return 'next';
+  },
+};
+
+/**
+ * Each of the players hands their whole hand to the next of them in turn order, or the previous
+ * one. Everyone still knows the cards they passed on.
+ */
+export const passHands: OpDef = {
+  status: 'ready',
+  params: { who: 'players', direction: 'direction' },
+  required: ['who'],
+  run(rt, op) {
+    const self = selfSeat(rt);
+    const n = rt.s.players.length;
+    const dir = rt.s.turn.direction;
+    // Turn order from the active player, whatever order the variable holds.
+    const seats = resolvePlayers(rt, op.who)
+      .filter((seat) => isIn(rt, seat))
+      .sort((a, b) => ((((a - self) * dir) % n) + n) % n - ((((b - self) * dir) % n) + n) % n);
+    if (seats.length < 2) return 'abort';
+    const step = op.direction === 'previous' ? -1 : 1;
+    const hands = seats.map((seat) => [...handOf(rt, seat).cards]);
+    seats.forEach((seat, i) => {
+      const to = seats[(i + step + seats.length) % seats.length]!;
+      for (const uid of hands[i]!) moveCard(rt, uid, handOf(rt, seat), handOf(rt, to), 'bottom');
+    });
+    log(rt, `${names(rt, seats)} pass their cards to the ${step === 1 ? 'next' : 'previous'} player.`);
+    seats.forEach((seat, i) => {
+      const got = hands[(i - step + seats.length) % seats.length]!;
+      if (got.length) log(rt, `You got ${cardList(rt, got)}.`, [seat]);
+    });
     return 'next';
   },
 };

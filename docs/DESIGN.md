@@ -121,6 +121,7 @@ Plain JSON, defined in `src/engine/types.ts`.
 - `program`: the interpreter's stack of frames.
 - `prompt`: the one question the game is waiting on, or null.
 - `stack`: plays waiting to resolve (reaction windows, empty for Pets).
+- `flags`: round flags that are on, like `upsideDown`. Public, cleared when a round starts.
 - `rng`: PRNG state. `log`: entries with visibility.
 
 ### Execution

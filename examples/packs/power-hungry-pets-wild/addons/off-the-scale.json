@@ -1,0 +1,44 @@
+{
+  "format": 1,
+  "id": "off-the-scale",
+  "name": "Off the Scale",
+  "description": "Two cards beyond the numbers. The Backflip Bat (-1) turns the round upside down, so the lowest card wins. The Galaxy Goldfish (∞) beats every number and calls the showdown at once when played. House design, balance untested.",
+  "image": "art/addon-off-the-scale.svg",
+  "requires": [],
+  "conflicts": [],
+  "cards": {
+    "add": [
+      {
+        "id": "backflip-bat",
+        "name": "Backflip Bat",
+        "value": -1,
+        "count": 1,
+        "image": "art/backflip-bat.svg",
+        "text": "When this card is put face up in front of anyone, the round turns upside down: the lowest card wins the showdown.",
+        "onDiscard": [
+          { "op": "flag", "id": "upsideDown" },
+          { "op": "log", "text": "The round turns upside down! The lowest card wins the showdown." }
+        ]
+      },
+      {
+        "id": "galaxy-goldfish",
+        "name": "Galaxy Goldfish",
+        "value": 100,
+        "valueLabel": "∞",
+        "count": 1,
+        "image": "art/galaxy-goldfish.svg",
+        "text": "Higher than any number. If you play it, the showdown happens right now, before anyone draws again.",
+        "onPlay": [
+          { "op": "log", "text": "{self} calls the showdown!" },
+          { "op": "endRound", "by": "showdown" }
+        ]
+      }
+    ]
+  },
+  "rules": {
+    "flags": {
+      "upsideDown": { "label": "Upside down", "text": "The lowest card wins the showdown." }
+    },
+    "showdown": { "lowestWins": { "flag": "upsideDown" } }
+  }
+}

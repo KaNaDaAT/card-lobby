@@ -1,0 +1,238 @@
+{
+  "format": 1,
+  "id": "power-hungry-pets-wild",
+  "name": "Power Hungry Pets: Wild Cards",
+  "version": "0.1.0",
+  "author": "Card Lobby (rules adaptation, original game by Exploding Kittens)",
+  "description": "Power Hungry Pets with two house addons: Off the Scale (a -1 that turns the round upside down and an ∞ that calls the showdown) and Second Litter (new pets for 1 to 8). An example custom pack.",
+  "engine": "0.1",
+  "players": { "min": 2, "max": 6 },
+  "art": {
+    "cover": "art/cover-wild.svg",
+    "back": "art/back.svg",
+    "accent": "#f2a93b"
+  },
+  "options": [
+    {
+      "id": "tieBreak",
+      "label": "Tie-break",
+      "type": "select",
+      "choices": [
+        { "value": "highestPlayed", "label": "Highest played card" },
+        { "value": "sumPlayed", "label": "Total of played cards" }
+      ],
+      "default": "highestPlayed"
+    },
+    {
+      "id": "tokensToWin",
+      "label": "Tokens to win",
+      "type": "number",
+      "min": 1,
+      "max": 7,
+      "default": { "byPlayers": { "2-3": 3, "4-6": 2 } }
+    }
+  ],
+  "rules": {
+    "zones": {
+      "deck": { "visibility": "hidden", "label": "the draw pile" },
+      "setAside": { "visibility": "hidden", "label": "the face-down set-aside card" },
+      "setAsideOpen": { "visibility": "public", "label": "the face-up set-aside cards" }
+    },
+    "playerZones": {
+      "hand": { "visibility": "owner" },
+      "played": { "visibility": "public" }
+    },
+    "statuses": {
+      "protected": { "label": "Shielded", "untargetable": true }
+    },
+    "roundSetup": [
+      { "op": "buildDeck", "to": "deck" },
+      { "op": "shuffle", "zone": "deck" },
+      { "op": "move", "from": "deck", "to": "setAside", "count": 1 },
+      {
+        "op": "if",
+        "cond": { "players": "2" },
+        "then": [{ "op": "move", "from": "deck", "to": "setAsideOpen", "count": 2, "faceUp": true }]
+      },
+      { "op": "deal", "from": "deck", "to": "all", "count": 1 }
+    ],
+    "turn": [
+      {
+        "op": "if",
+        "cond": { "zoneEmpty": "deck" },
+        "then": [{ "op": "endRound", "by": "showdown" }]
+      },
+      { "op": "draw", "who": "self" },
+      { "op": "play", "min": 1, "max": 1 }
+    ],
+    "roundEnd": { "lastStanding": true },
+    "showdown": {
+      "tieBreak": { "option": "tieBreak" },
+      "stillTied": "allWin"
+    },
+    "scoring": {
+      "roundWin": 1,
+      "toWin": { "option": "tokensToWin" },
+      "tiedAtTarget": "decidingRound"
+    },
+    "rounds": { "first": "random", "next": "lastWinner" }
+  },
+  "cards": [
+    {
+      "id": "royal-robovac",
+      "name": "Royal Robovac",
+      "value": 0,
+      "count": 1,
+      "image": "art/royal-robovac.svg",
+      "text": "No action. At the showdown, if anyone holds the King Cat, this is the highest card.",
+      "showdownValue": [
+        { "if": { "anyHandHas": "king-cat" }, "value": "highest" }
+      ]
+    },
+    {
+      "id": "crystal-bowl",
+      "name": "Crystal Bowl",
+      "value": 1,
+      "count": 5,
+      "image": "art/crystal-bowl.svg",
+      "text": "Choose a player and guess their card's number (not 1). If you are right, they are out.",
+      "onPlay": [
+        { "op": "choosePlayer", "as": "t", "from": "others" },
+        { "op": "guess", "as": "g", "exclude": [1] },
+        {
+          "op": "if",
+          "cond": { "handHasValue": ["$t", "$g"] },
+          "then": [{ "op": "eliminate", "who": "$t" }],
+          "else": [{ "op": "log", "text": "{self} guessed wrong." }]
+        }
+      ]
+    },
+    {
+      "id": "mouse-trapper",
+      "name": "Mouse Trapper",
+      "value": 2,
+      "count": 3,
+      "image": "art/mouse-trapper.svg",
+      "text": "Look at the top card of the draw pile, then put it back anywhere in the pile.",
+      "onPlay": [
+        { "op": "peek", "zone": "deck", "count": 1, "as": "top" },
+        { "op": "choosePosition", "zone": "deck", "as": "pos" },
+        { "op": "move", "card": "$top", "from": "deck", "to": "deck", "at": "$pos" },
+        { "op": "log", "text": "{self} puts it back somewhere in the draw pile." }
+      ]
+    },
+    {
+      "id": "battle-bunny",
+      "name": "Battle Bunny",
+      "value": 3,
+      "count": 3,
+      "image": "art/battle-bunny.svg",
+      "text": "Choose a player and secretly compare cards. The lower card is out. A tie does nothing.",
+      "onPlay": [
+        { "op": "choosePlayer", "as": "t", "from": "others" },
+        { "op": "compareHands", "a": "self", "b": "$t", "as": "loser" },
+        {
+          "op": "if",
+          "cond": { "set": "$loser" },
+          "then": [{ "op": "eliminate", "who": "$loser" }]
+        }
+      ]
+    },
+    {
+      "id": "shell-shield",
+      "name": "Shell Shield",
+      "value": 4,
+      "count": 2,
+      "image": "art/shell-shield.svg",
+      "text": "Until your next turn, other cards cannot affect you.",
+      "onPlay": [
+        { "op": "status", "who": "self", "id": "protected", "until": "ownNextTurn" }
+      ]
+    },
+    {
+      "id": "snake-sorcerer",
+      "name": "Snake Sorcerer",
+      "value": 5,
+      "count": 2,
+      "image": "art/snake-sorcerer.svg",
+      "text": "Choose a player, you included. They put their card face up without its action and draw a new one.",
+      "onPlay": [
+        { "op": "choosePlayer", "as": "t", "from": "all" },
+        { "op": "discard", "who": "$t" },
+        {
+          "op": "if",
+          "cond": { "in": "$t" },
+          "then": [{ "op": "draw", "who": "$t", "fallback": "setAside" }]
+        }
+      ]
+    },
+    {
+      "id": "doggy-grave-digger",
+      "name": "Doggy Grave Digger",
+      "value": 6,
+      "count": 1,
+      "image": "art/doggy-grave-digger.svg",
+      "text": "Look at the face-down set-aside card. You may swap it with your card.",
+      "onPlay": [
+        { "op": "peek", "zone": "setAside", "count": 1 },
+        { "op": "confirm", "as": "swap", "text": "Swap your card with the set-aside card?" },
+        {
+          "op": "if",
+          "cond": { "is": "$swap" },
+          "then": [{ "op": "swap", "a": "hand:self", "b": "setAside" }]
+        }
+      ]
+    },
+    {
+      "id": "jittery-juggler",
+      "name": "Jittery Juggler",
+      "value": 7,
+      "count": 1,
+      "image": "art/jittery-juggler.svg",
+      "text": "Everyone still in, you included, shuffles their card into the draw pile and gets a new one.",
+      "onPlay": [
+        { "op": "selectPlayers", "as": "group", "from": "all" },
+        { "op": "move", "from": "hand:$group", "to": "deck", "count": "all" },
+        { "op": "shuffle", "zone": "deck" },
+        { "op": "deal", "from": "deck", "to": "$group", "count": 1 }
+      ]
+    },
+    {
+      "id": "hermit-home-swap",
+      "name": "Hermit Home Swap",
+      "value": 8,
+      "count": 1,
+      "image": "art/hermit-home-swap.svg",
+      "text": "Choose a player and trade cards with them.",
+      "onPlay": [
+        { "op": "choosePlayer", "as": "t", "from": "others" },
+        { "op": "swap", "a": "hand:self", "b": "hand:$t" }
+      ]
+    },
+    {
+      "id": "not-a-pet",
+      "name": "Not A Pet!",
+      "value": 9,
+      "count": 1,
+      "image": "art/not-a-pet.svg",
+      "text": "Whoever holds the King Cat trades it for your card.",
+      "onPlay": [
+        { "op": "choosePlayer", "as": "t", "from": "others", "holding": "king-cat", "auto": true },
+        { "op": "reveal", "zone": "hand:$t", "to": "all" },
+        { "op": "swap", "a": "hand:self", "b": "hand:$t" }
+      ]
+    },
+    {
+      "id": "king-cat",
+      "name": "King Cat",
+      "value": 10,
+      "count": 1,
+      "image": "art/king-cat.svg",
+      "text": "If this card is ever put face up in front of you, you are out.",
+      "onDiscard": [
+        { "op": "eliminate", "who": "self" }
+      ]
+    }
+  ],
+  "addons": ["addons/big-litter.json", "addons/off-the-scale.json", "addons/second-litter.json"]
+}

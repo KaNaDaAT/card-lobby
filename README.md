@@ -33,7 +33,7 @@ needs no network:
 2. Copy the link (it keeps local mode) and open it in another tab with `&as=2` added, so that
    tab is a second player. `&as=3` for a third, and so on.
 
-Other scripts: `npm test` (unit tests plus 950 simulated games; `SIM_GAMES=5000 npm test` for
+Other scripts: `npm test` (unit tests plus 1100 simulated games; `SIM_GAMES=5000 npm test` for
 more), `npm run e2e` (browser tests against the production build; run
 `npx playwright install chromium` once first), `npm run check` (type-check), `npm run build`
 (static files in `dist/`).
@@ -55,6 +55,12 @@ an account meant for your group.
 Copy `public/packs/power-hungry-pets` (or `exploding-kittens` for a draw-and-react game),
 change `pack.json` and the art, zip the folder, and pick the zip with the Custom pack tile in
 the lobby. The lobby lists any problems with their file and path. [docs/PACK_FORMAT.md](docs/PACK_FORMAT.md) describes every field and op.
+
+`npm run zip-pack -- <folder>` zips a pack folder the way the lobby expects. To try it, zip the
+example in `examples/packs/power-hungry-pets-wild`: Power Hungry Pets with two house addons,
+Off the Scale (a -1 that turns the round upside down and an ∞ that calls the showdown) and
+Second Litter (a new pet for each number from 1 to 8). Its rules are in
+[docs/rules/power-hungry-pets-wild.md](docs/rules/power-hungry-pets-wild.md).
 
 ## Docs
 

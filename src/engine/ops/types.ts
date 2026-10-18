@@ -39,7 +39,10 @@ export type ParamKind =
   | 'audience'
   | 'cardIds'
   | 'pick'
-  | 'what';
+  | 'what'
+  | 'flag'
+  | 'flagTo'
+  | 'direction';
 
 export interface OpDef {
   /** `future` ops are designed but not built. Packs that use them are rejected. */

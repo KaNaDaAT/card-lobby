@@ -23,13 +23,15 @@ import type { OpDef } from './types';
 
 /**
  * Players an op may pick: still in, not protected (you can always pick yourself), holding a
- * given card or any cards at all if asked.
+ * given card or any cards at all if asked, and not named in `except`.
  */
 function candidates(rt: Rt, op: Op): Seat[] {
   const self = selfSeat(rt);
+  const except = op.except === undefined ? [] : resolvePlayers(rt, op.except);
   return resolvePlayers(rt, op.from).filter(
     (seat) =>
       isIn(rt, seat) &&
+      !except.includes(seat) &&
       (op.includeProtected === true || seat === self || !isUntargetable(rt, seat)) &&
       (op.holding === undefined || handOf(rt, seat).cards.some((uid) => rt.s.cards[uid]?.cardId === op.holding)) &&
       (op.withCards !== true || handOf(rt, seat).cards.length > 0),
@@ -38,7 +40,7 @@ function candidates(rt: Rt, op: Op): Seat[] {
 
 export const choosePlayer: OpDef = {
   status: 'ready',
-  params: { as: 'as', from: 'players', holding: 'cardId', withCards: 'bool', auto: 'bool', includeProtected: 'bool' },
+  params: { as: 'as', from: 'players', except: 'players', holding: 'cardId', withCards: 'bool', auto: 'bool', includeProtected: 'bool' },
   required: ['as', 'from'],
   asks: true,
   run(rt, op, frame) {
@@ -63,7 +65,7 @@ export const choosePlayer: OpDef = {
 
 export const selectPlayers: OpDef = {
   status: 'ready',
-  params: { as: 'as', from: 'players', withCards: 'bool', includeProtected: 'bool' },
+  params: { as: 'as', from: 'players', except: 'players', withCards: 'bool', includeProtected: 'bool' },
   required: ['as', 'from'],
   run(rt, op) {
     const seats = candidates(rt, op);
@@ -95,8 +97,9 @@ export const guess: OpDef = {
     }
     const value = frame.answer as number;
     setVar(rt, String(op.as), value);
-    const cards = rt.pack.cards.filter((c) => c.value === value).map((c) => c.name);
-    log(rt, `${nameOf(rt, selfSeat(rt))} guesses ${value}${cards.length ? ` (${cards.join(' or ')})` : ''}.`);
+    const cards = rt.pack.cards.filter((c) => c.value === value);
+    const shown = cards.find((c) => c.valueLabel)?.valueLabel ?? value;
+    log(rt, `${nameOf(rt, selfSeat(rt))} guesses ${shown}${cards.length ? ` (${cards.map((c) => c.name).join(' or ')})` : ''}.`);
     return 'next';
   },
 };

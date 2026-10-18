@@ -44,6 +44,8 @@ export interface CardDef {
   id: string;
   name: string;
   value?: number;
+  /** Shown instead of the value, like "∞" for a card whose value is 100. */
+  valueLabel?: string;
   count: Count;
   text: string;
   image?: string;
@@ -56,6 +58,11 @@ export interface CardDef {
   /** Only playable as part of a combo, like the cat cards of Exploding Kittens. */
   comboOnly?: boolean;
   showdownValue?: ValueRule[];
+}
+
+/** How a card's value is printed: its label if it has one, like "∞". */
+export function valueText(card: Pick<CardDef, 'value' | 'valueLabel'>): string {
+  return card.valueLabel ?? String(card.value ?? '');
 }
 
 /** A multi-card play. Its ops run instead of the cards' own onPlay. */
@@ -91,6 +98,8 @@ export interface Rules {
   zones: Record<string, { visibility: 'public' | 'hidden'; label?: string }>;
   playerZones: Record<string, { visibility: 'public' | 'owner'; label?: string }>;
   statuses?: Record<string, { label: string; untargetable?: boolean }>;
+  /** Switches for the whole round, set by the `flag` op and shown on the table. Off at round start. */
+  flags?: Record<string, { label: string; text?: string }>;
   roundSetup: Op[];
   turn: Op[];
   roundEnd?: { lastStanding?: boolean };
@@ -100,6 +109,8 @@ export interface Rules {
   showdown?: {
     tieBreak?: 'highestPlayed' | 'sumPlayed' | 'none' | OptionRef;
     stillTied?: 'allWin';
+    /** When this holds at the showdown, the lowest card wins instead. */
+    lowestWins?: Condition;
   };
   scoring: {
     roundWin: number;
@@ -130,6 +141,7 @@ export type Condition =
   | { handHasValue: [string, string | number] }
   | { handHas: [string, string] }
   | { anyHandHas: string }
+  | { flag: string }
   | { not: Condition }
   | { all: Condition[] }
   | { any: Condition[] };

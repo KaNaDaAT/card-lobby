@@ -70,6 +70,7 @@ export function createGame(pack: Pack, game: NewGame): GameState {
     result: null,
     winners: [],
     reactCards: pack.cards.filter((c) => c.onReact?.length).map((c) => c.id),
+    flags: [],
     nextId: 0,
     rng: seedRng(game.seed),
     log: [],
@@ -112,6 +113,7 @@ export function startRound(rt: Rt): void {
   s.result = null;
   s.prompt = null;
   s.stack = [];
+  s.flags = [];
   s.cards = {};
   s.zones = {};
   for (const [id, z] of Object.entries(rt.pack.rules.zones)) s.zones[id] = { id, visibility: z.visibility, cards: [] };
@@ -208,13 +210,19 @@ export function showdown(rt: Rt): void {
       ? { seat, cardId: cardOf(rt, uid).cardId, value: showdownValueOf(rt, uid, seat) }
       : { seat, cardId: '', value: 'lowest' as const };
   });
-  log(rt, 'The draw pile is empty. Showdown!');
+  const rule = rt.pack.rules.showdown?.lowestWins;
+  const lowestWins = rule !== undefined && evalCond(rt, rule);
+  // A card can call the showdown early (the Galaxy Goldfish).
+  const deck = rt.s.zones.deck;
+  log(rt, deck && !deck.cards.length ? 'The draw pile is empty. Showdown!' : 'Showdown!');
+  if (lowestWins) log(rt, 'The lowest card wins.');
   for (const e of entries) {
     if (e.cardId) log(rt, `${nameOf(rt, e.seat)} shows ${rt.defs.get(e.cardId)?.name ?? e.cardId}.`);
   }
 
-  const best = Math.max(...entries.map((e) => rank(e.value)));
-  let winners = entries.filter((e) => rank(e.value) === best).map((e) => e.seat);
+  const score = (v: ShowdownValue) => showdownScore(v, lowestWins);
+  const best = Math.max(...entries.map((e) => score(e.value)));
+  let winners = entries.filter((e) => score(e.value) === best).map((e) => e.seat);
   let tieBreak: RoundResult['tieBreak'];
   if (winners.length > 1) {
     const rule = tieBreakRule(rt);
@@ -226,10 +234,18 @@ export function showdown(rt: Rt): void {
       log(rt, rule === 'highestPlayed' ? 'Tie! The highest card played decides.' : 'Tie! The total of played cards decides.');
     }
   }
-  endRound(rt, 'showdown', winners, { showdown: entries, ...(tieBreak ? { tieBreak } : {}) });
+  endRound(rt, 'showdown', winners, { showdown: entries, ...(tieBreak ? { tieBreak } : {}), ...(lowestWins ? { lowestWins: true as const } : {}) });
 }
 
-const rank = (v: ShowdownValue) => (v === 'highest' ? Infinity : v === 'lowest' ? -Infinity : v);
+/**
+ * How good a showdown value is, higher is better. `highest` beats and `lowest` loses to every
+ * number, also when the lowest card wins.
+ */
+export function showdownScore(v: ShowdownValue, lowestWins = false): number {
+  if (v === 'highest') return Infinity;
+  if (v === 'lowest') return -Infinity;
+  return lowestWins ? -v : v;
+}
 
 function showdownValueOf(rt: Rt, uid: string, seat: Seat): ShowdownValue {
   const def = defOf(rt, uid);

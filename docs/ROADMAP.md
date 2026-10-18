@@ -120,3 +120,12 @@ Done as `src/engine/kittens.test.ts` (card by card and combo by combo), `sim-kit
 
 Next: expansion cards (Reverse, Alter the Future, Draw from the Bottom) as an addon, once
 someone wants them.
+
+## M8: Example custom pack and table view
+
+- [x] Example pack to upload as a zip: Power Hungry Pets with two house addons, Off the Scale
+  (-1 and ∞) and Second Litter (a new pet for 1 to 8). `npm run zip-pack` builds the zip.
+- [x] Format additions they needed: `valueLabel`, round `flags` with the `flag` op and
+  condition, `showdown.lowestWins`, a showdown called early from a card, `passHands`, and
+  `except` for choosing players.
+- [ ] Optional round-table view: players seated around a table, the turn plain to see.

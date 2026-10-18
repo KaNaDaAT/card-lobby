@@ -5,6 +5,10 @@
 import petsJson from '../../public/packs/power-hungry-pets/pack.json';
 import bigLitterJson from '../../public/packs/power-hungry-pets/addons/big-litter.json';
 import kittensJson from '../../public/packs/exploding-kittens/pack.json';
+import wildJson from '../../examples/packs/power-hungry-pets-wild/pack.json';
+import wildLitterJson from '../../examples/packs/power-hungry-pets-wild/addons/big-litter.json';
+import offTheScaleJson from '../../examples/packs/power-hungry-pets-wild/addons/off-the-scale.json';
+import secondLitterJson from '../../examples/packs/power-hungry-pets-wild/addons/second-litter.json';
 import { mergeAddons } from '../packs/merge';
 import type { Addon, OptionValue, Pack } from '../packs/types';
 import { apply, startGame, viewFor } from './index';
@@ -16,6 +20,14 @@ export const kittens = kittensJson as unknown as Pack;
 
 export function petsPack(addons: string[] = []): Pack {
   return mergeAddons(petsBase, [bigLitter], addons);
+}
+
+/** The example custom pack: Pets with the Off the Scale and Second Litter addons. */
+export const wildBase = wildJson as unknown as Pack;
+export const wildAddons = [wildLitterJson, offTheScaleJson, secondLitterJson] as unknown as Addon[];
+
+export function wildPack(addons: string[] = ['off-the-scale', 'second-litter']): Pack {
+  return mergeAddons(wildBase, wildAddons, addons);
 }
 
 export const PLAYER_NAMES = ['Ann', 'Ben', 'Cat', 'Dan', 'Eve', 'Fay', 'Gus', 'Hal', 'Ivy', 'Jon'];

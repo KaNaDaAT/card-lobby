@@ -8,6 +8,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: 'e2e',
   testMatch: '**/*.e2e.ts',
+  globalSetup: './e2e/global-setup.mjs',
   timeout: 120_000,
   expect: { timeout: 15_000 },
   workers: 1,

@@ -63,6 +63,7 @@ third of card art calm.
 | `id` | string | Unique in the pack |
 | `name` | string | |
 | `value` | number | Optional. Used by guesses, comparisons and the showdown |
+| `valueLabel` | string | Optional, 1 to 3 characters shown instead of the value, on cards and in guesses. `"value": 100, "valueLabel": "∞"` makes an infinity card |
 | `count` | Count | How many copies go into the deck |
 | `text` | string | Rules text printed on the card. Plain text |
 | `image` | string | Optional art path |
@@ -76,6 +77,8 @@ third of card art calm.
 
 `ValueRule`: `{ "if": Condition, "value": number | "highest" | "lowest" }`. Use `"highest"`
 instead of a big number, so an addon that adds higher cards cannot silently beat it.
+`"highest"` beats and `"lowest"` loses to every number, also when `showdown.lowestWins`
+turns the showdown around.
 
 ## Counts
 
@@ -137,12 +140,13 @@ Options appear in the lobby. Rules refer to them with `{ "option": "<id>" }`.
 | `zones` | Shared zones. Visibility `hidden` (count only), `public`. Optional `label` names the zone in logs, like `"the draw pile"`. The engine needs a `deck` zone |
 | `playerZones` | Zones every player has. Visibility `owner` (only the owner sees), `public`. Optional `label`. The engine needs `hand` and `played` |
 | `statuses` | Status definitions. `untargetable: true` means choosers and group selectors skip the player |
+| `flags` | Switches for the whole round, like `{ "upsideDown": { "label": "Upside down", "text": "The lowest card wins the showdown." } }`. The `flag` op sets them, the `flag` condition reads them, and the table shows the label and text while one is on. All are off when a round starts |
 | `roundSetup` | Ops run at the start of every round, for the players in that round |
 | `turn` | Ops run for each turn. `self` is the active player |
 | `roundEnd.lastStanding` | End the round as soon as one player is left. Checked after every op |
 | `combos` | M7. Multi-card plays. `match`: `same` (all one card id) or `distinct` (all different). Playing them runs `ops` instead of the cards' `onPlay` (`onDiscard` still fires) |
 | `reactions.seconds` | M7. How long a reaction window stays open, 1 to 60 seconds or a number option. Only used when the deck has `onReact` cards. Each reaction restarts the window, and it always runs its full length, so it never tells who holds a reaction |
-| `showdown` | How the round is decided when `endRound` runs with `by: "showdown"`. Highest effective value wins. `tieBreak`: `highestPlayed`, `sumPlayed` or `none`. `stillTied`: `allWin` |
+| `showdown` | How the round is decided when `endRound` runs with `by: "showdown"`. Highest effective value wins. `tieBreak`: `highestPlayed`, `sumPlayed` or `none`. `stillTied`: `allWin`. `lowestWins`: a condition; when it holds, the lowest value wins instead (the tie-break stays the same). `endRound` may also run from a card, which calls the showdown early |
 | `scoring.roundWin` | Tokens for each round winner |
 | `scoring.toWin` | Tokens needed to win the game. Fixed when the game starts |
 | `scoring.tiedAtTarget` | `decidingRound`: if several players reach the target together, they play one more round among themselves |
@@ -200,8 +204,8 @@ the current effect is skipped. The card still counts as played.
 
 | Op | Params | Status |
 |---|---|---|
-| `choosePlayer` | `as`, `from`, `holding?` (card id), `withCards?`, `auto?`, `includeProtected?` | M2. `auto` skips the prompt when exactly one player fits. Untargetable players are skipped unless `includeProtected`. M7: `withCards` skips players with an empty hand |
-| `selectPlayers` | `as`, `from`, `withCards?`, `includeProtected?` | M2. No prompt. Stores every fitting player |
+| `choosePlayer` | `as`, `from`, `except?`, `holding?` (card id), `withCards?`, `auto?`, `includeProtected?` | M2. `auto` skips the prompt when exactly one player fits. Untargetable players are skipped unless `includeProtected`. M7: `withCards` skips players with an empty hand. `except` leaves out players, like one chosen before (`"except": "$a"`) |
+| `selectPlayers` | `as`, `from`, `except?`, `withCards?`, `includeProtected?` | M2. No prompt. Stores every fitting player |
 | `guess` | `as`, `exclude?` (values) | M2. Pick a card value present in the merged deck. Logged for everyone |
 | `choosePosition` | `zone`, `as`, `insert?` | M2. 0 is the top. M7: `insert` adds the bottom, for a card going into the zone |
 | `confirm` | `as`, `text` | M2. Yes or no |
@@ -215,12 +219,14 @@ the current effect is skipped. The card still counts as played.
 | `peek` | `zone`, `count = 1`, `as?` | M2. Shows cards from the top to self only |
 | `reveal` | `zone`, `to` (`all` or players) | M2 |
 | `swap` | `a`, `b` (single-card zones) | M2. Each previous holder still knows the card they gave away |
+| `passHands` | `who`, `direction? = next` (or `previous`) | Each of the players passes their hand to the next of them in turn order. Everyone still knows what they passed on |
 | `discard` | `who` | M2. Forced: hand card goes face up in front of them. Fires `onDiscard`, not `onPlay` |
 | `compareHands` | `a`, `b`, `as` | M2. Shows each hand to the other player. Stores the lower player, nothing on a tie |
 | `eliminate` | `who` | M2. Out for the round. Hand goes face up into `played`, without hooks |
 | `status` | `who`, `id`, `until` (`ownNextTurn`, `endOfTurn`, `endOfRound`, `permanent`) | M2 |
 | `if` | `cond`, `then`, `else?` | M2 |
 | `log` | `text`, `to? = all` | M2 |
+| `flag` | `id`, `to? = true` (or `false`, `"toggle"`) | Turns a round flag from `rules.flags` on or off |
 | `take` | `from`, `pick` (`random` or `$var`), `to? = hand:self` | M7. Moves one card: a random one, the uid from `chooseCard`, or the first card with the id from `nameCard`. A named card that is not there ends the effect |
 | `cancel` | `what: stackTop` | M7. Only in `onReact`. Cancels the play in the reaction window, or brings it back if it was canceled |
 | `reorder` | `zone`, `count` | Future (Alter the Future) |
@@ -237,6 +243,7 @@ the current effect is skipped. The card still counts as played.
 | `{ "handHasValue": ["$t", "$g"] }` | The player's hand holds a card with that value |
 | `{ "handHas": ["$t", "card-id"] }` | M7. The player's hand holds that card (or the card id in a variable) |
 | `{ "anyHandHas": "card-id" }` | Some player still in holds that card. Used at showdown |
+| `{ "flag": "upsideDown" }` | That round flag is on |
 | `{ "not": C }`, `{ "all": [C] }`, `{ "any": [C] }` | Logic |
 
 ## Addons

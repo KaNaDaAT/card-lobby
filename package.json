@@ -11,7 +11,8 @@
     "check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "zip-pack": "node scripts/zip-pack.mjs"
   },
   "dependencies": {
     "trystero": "^0.26.0"

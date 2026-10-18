@@ -4,9 +4,10 @@
  * round and game results. Clients never run rules, they only draw views and answer prompts.
  */
 import { findCombo } from '../../engine/ops/flow';
+import { showdownScore } from '../../engine/round';
 import type { GameView, PlayerView, Prompt, PromptKind, Seat, VisibleCard, ZoneView } from '../../engine/types';
 import type { LobbyView } from '../../net/protocol';
-import type { CardDef, LoadedPack, Pack } from '../../packs/types';
+import { valueText, type CardDef, type LoadedPack, type Pack } from '../../packs/types';
 import { mergeSelection } from '../../session/lobby';
 import { avatar, pill } from '../components/bits';
 import { cardBack, cardFace, type CardOpts } from '../components/card';
@@ -407,8 +408,10 @@ function promptBar(t: T): HTMLElement | null {
         'div',
         { class: 'choices' },
         p.choices.map((value) => {
-          const names = t.pack.cards.filter((c) => c.value === value).map((c) => c.name);
-          return h('button', { type: 'button', class: 'btn choice choice-guess', onclick: () => answer(t, value) }, h('strong', null, value), names.length ? h('span', { class: 'choice-sub' }, names.join(', ')) : null);
+          const cards = t.pack.cards.filter((c) => c.value === value);
+          const names = cards.map((c) => c.name);
+          const shown = cards.find((c) => c.valueLabel)?.valueLabel ?? value;
+          return h('button', { type: 'button', class: 'btn choice choice-guess', onclick: () => answer(t, value) }, h('strong', null, shown), names.length ? h('span', { class: 'choice-sub' }, names.join(', ')) : null);
         }),
       );
       break;
@@ -488,6 +491,17 @@ function statusBar(t: T): HTMLElement {
       h('span', { class: 'muted' }, g.tokensToWin === 1 ? 'One round decides the game' : `First to ${g.tokensToWin} tokens wins`),
     ),
     status,
+    // Round flags change the rules for everyone, so they stay in sight.
+    g.phase === 'round' && g.flags.length
+      ? h(
+          'div',
+          { class: 'table-flags' },
+          g.flags.map((id) => {
+            const f = t.pack.rules.flags?.[id];
+            return h('p', { class: 'table-flag' }, h('strong', null, f?.label ?? id), f?.text ? h('span', null, f.text) : null);
+          }),
+        )
+      : null,
     last ? h('p', { class: `ticker${last.private ? ' is-private' : ''}`, 'aria-hidden': 'true' }, last.text) : null,
   );
 }
@@ -511,19 +525,19 @@ function result(t: T): HTMLElement | null {
     reason = h(
       'div',
       { class: 'showdown' },
-      h('p', null, 'The draw pile ran out. Showdown:'),
+      h('p', null, `${g.zones.deck?.count === 0 ? 'The draw pile ran out. ' : ''}Showdown${r.lowestWins ? ', and the lowest card wins' : ''}:`),
       h(
         'ul',
         { class: 'showdown-list' },
         [...r.showdown]
-          .sort((a, b) => rank(b.value) - rank(a.value))
+          .sort((a, b) => showdownScore(b.value, r.lowestWins) - showdownScore(a.value, r.lowestWins))
           .map((e) =>
             h(
               'li',
               { class: r.winners.includes(e.seat) ? 'is-winner' : '' },
               h('span', { class: 'showdown-name' }, name(t, e.seat)),
               h('span', null, e.cardId ? def(t, e.cardId).name : 'no card'),
-              h('span', { class: 'muted' }, e.value === 'highest' ? 'counts highest' : e.value === 'lowest' ? 'counts lowest' : `value ${e.value}`),
+              h('span', { class: 'muted' }, shownValue(t, e.cardId, e.value)),
             ),
           ),
       ),
@@ -570,7 +584,13 @@ function result(t: T): HTMLElement | null {
   );
 }
 
-const rank = (v: number | 'highest' | 'lowest') => (v === 'highest' ? Infinity : v === 'lowest' ? -Infinity : v);
+/** A showdown value in words. A card that counted as its own value shows its label, like ∞. */
+function shownValue(t: T, cardId: string, v: number | 'highest' | 'lowest'): string {
+  if (v === 'highest') return 'beats every card';
+  if (v === 'lowest') return 'loses to every card';
+  const d = cardId ? def(t, cardId) : undefined;
+  return `value ${d && d.value === v ? valueText(d) : v}`;
+}
 
 /** The game log for the side column. Private lines are only in your view. */
 export function logPanel(game: GameView): HTMLElement {

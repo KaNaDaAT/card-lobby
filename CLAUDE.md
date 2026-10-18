@@ -12,10 +12,11 @@ Read [docs/DESIGN.md](docs/DESIGN.md) before changing architecture, and
 
 - `npm run dev` starts Vite on http://localhost:5173
 - `npm run check` type-checks
-- `npm test` runs Vitest once, including 950 simulated games (`SIM_GAMES=5000 npm test` for more)
+- `npm test` runs Vitest once, including 1100 simulated games (`SIM_GAMES=5000 npm test` for more)
 - `npm run build` type-checks and builds static files into `dist/`
 - `npm run e2e` runs the Playwright browser tests in `e2e/` against the production build
   (`npx playwright install chromium` once per machine)
+- `npm run zip-pack -- <folder>` zips a pack folder for the lobby's Custom pack tile
 
 ## Stack rules
 
@@ -43,9 +44,10 @@ network, no clock, seeded RNG, plain-JSON state. Only the host runs it.
 - `viewFor(state, seat)` must never include a hidden card the seat does not know.
   Simulation tests assert this.
 - Rules decisions for each game live in `docs/rules/`:
-  [power-hungry-pets.md](docs/rules/power-hungry-pets.md) and
-  [exploding-kittens.md](docs/rules/exploding-kittens.md). Change the file together with its
-  pack.
+  [power-hungry-pets.md](docs/rules/power-hungry-pets.md),
+  [exploding-kittens.md](docs/rules/exploding-kittens.md) and
+  [power-hungry-pets-wild.md](docs/rules/power-hungry-pets-wild.md) (the example custom pack's
+  house addons). Change the file together with its pack.
 - Reaction windows are timed by the host's clock only. The engine gets `now` with inputs and
   never reads a clock itself.
 
@@ -69,6 +71,9 @@ network, no clock, seeded RNG, plain-JSON state. Only the host runs it.
 - `e2e` browser tests (`*.e2e.ts`), several local-mode tabs acting as players
 - `.github/workflows` CI on pull requests, GitHub Pages deploy on `main`
 - `public/packs` built-in packs, one folder each, listed in `public/packs/index.json`
+- `examples/packs` packs to upload as a zip, not built in. `power-hungry-pets-wild` copies
+  Power Hungry Pets (a test keeps the copy in step) and adds two house addons
+- `scripts/zip-pack.mjs` zips a pack folder, no dependencies
 
 ## Testing locally
 

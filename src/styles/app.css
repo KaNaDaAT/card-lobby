@@ -1212,6 +1212,26 @@ select.input {
   color: var(--accent-ink);
 }
 
+.table-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.table-flag {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin: 0;
+  padding: 6px 12px;
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 14px;
+}
+
 .ticker {
   width: 100%;
   color: var(--text-2);

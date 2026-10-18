@@ -4,8 +4,8 @@
  */
 import { buildDeck, deal, draw, move, shuffle } from './cards';
 import { chooseCard, choosePlayer, choosePosition, confirm, guess, nameCard, selectPlayers } from './choices';
-import { compareHands, discard, eliminate, peek, reveal, status, swap, take } from './effects';
-import { addTurns, cancel, endRound, endTurn, ifOp, logOp, play } from './flow';
+import { compareHands, discard, eliminate, passHands, peek, reveal, status, swap, take } from './effects';
+import { addTurns, cancel, endRound, endTurn, flag, ifOp, logOp, play } from './flow';
 import type { OpDef } from './types';
 
 const future: OpDef = { status: 'future', params: {}, required: [] };
@@ -38,6 +38,8 @@ export const OPS: Record<string, OpDef> = {
   nameCard,
   take,
   cancel,
+  passHands,
+  flag,
   // Designed for Exploding Kittens expansions, not built yet.
   reverse: future,
   reorder: future,
