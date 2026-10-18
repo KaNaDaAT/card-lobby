@@ -118,6 +118,12 @@ export const renderHome: Screen<{ name: 'home' }> = (root) => {
         error,
       ),
       h('p', { class: 'home-foot muted' }, 'Peer to peer and encrypted. No accounts, no servers.'),
+      h(
+        'p',
+        { class: 'home-foot home-note muted small' },
+        'A test project for game nights with friends, free for anyone to use. Made almost entirely with AI, so expect rough edges. ',
+        h('a', { href: 'https://github.com/KaNaDaAT/card-lobby', target: '_blank', rel: 'noopener noreferrer' }, 'Source and details'),
+      ),
     ),
   );
   nameInput.focus();

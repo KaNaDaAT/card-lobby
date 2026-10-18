@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Peer-to-peer card game lobby. Games and addons are data packs.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",

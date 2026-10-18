@@ -421,6 +421,17 @@ select.input {
   font-size: 13px;
 }
 
+.home-note {
+  max-width: 440px;
+  margin-top: -8px;
+  text-align: center;
+}
+
+.home-note a {
+  color: inherit;
+  text-decoration: underline;
+}
+
 /* ---------- Room ---------- */
 
 .room {

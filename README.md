@@ -1,5 +1,11 @@
 # Card Lobby
 
+> **About this project.** Card Lobby is a test project, made to play card games with friends.
+> Anyone is welcome to use it, host it or build on it. It was created almost entirely with AI
+> (Claude Code): the code, the docs, the card art and the house rules. People looked at it and
+> played it, but nobody reviewed every line, so expect rough edges and read the code before
+> you rely on it for anything beyond a game night.
+
 Card games with friends, right in the browser. One person creates a lobby, the others join by
 link or code, everyone chats and plays. Peer to peer and encrypted, no accounts, no game server.
 
@@ -74,8 +80,12 @@ for each number from 1 to 8). Their rules are in
   [docs/rules/exploding-kittens.md](docs/rules/exploding-kittens.md): rules as implemented,
   including house rules
 
-## Credits
+## License and credits
 
-Power Hungry Pets and Exploding Kittens are games by Exploding Kittens. This project
-implements their rules for private play among friends. The card art here is original and only
-loosely inspired by the games.
+The code, docs and art in this repository are under the [MIT license](LICENSE): use them as
+you like.
+
+Power Hungry Pets and Exploding Kittens are games by Exploding Kittens, and their names belong
+to them. This project is not affiliated with or endorsed by Exploding Kittens. It implements
+their rules for play among friends; if you enjoy them, buy the real games. The card art here
+is original (generated for this project) and only loosely inspired by the games.
