@@ -1,12 +1,11 @@
 /**
- * The example addons for Power Hungry Pets in examples/addons, Off the Scale and Second
- * Litter, card by card, as described in docs/rules/power-hungry-pets-addons.md. `order` is
- * [active player, next, next after that].
+ * The Off the Scale and Second Litter addons of Power Hungry Pets, card by card, as described
+ * in docs/rules/power-hungry-pets.md. `order` is [active player, next, next after that].
  */
 import { describe, expect, it } from 'vitest';
-import { Table, wildPack } from './testing';
+import { petsPack, Table } from './testing';
 
-const wild = wildPack();
+const wild = petsPack(['off-the-scale', 'second-litter']);
 const table = (players = 3, seed = 1) => new Table(wild, players, seed);
 const PROTECTED = { id: 'protected', until: 'ownNextTurn' } as const;
 

@@ -1,0 +1,26 @@
+{
+  "format": 1,
+  "id": "sleepy-ferrets",
+  "name": "Sleepy Ferrets",
+  "description": "The tutorial addon: a ferret that peeks at a card and then takes a nap.",
+  "extends": "power-hungry-pets",
+  "author": "The Card Lobby tutorial",
+  "image": "art/addon.svg",
+  "cards": {
+    "add": [
+      {
+        "id": "sleepy-ferret",
+        "name": "Sleepy Ferret",
+        "value": 4,
+        "count": 1,
+        "image": "art/sleepy-ferret.svg",
+        "text": "Choose another player and secretly look at their card. Then take a nap: until your next turn, other cards cannot affect you.",
+        "onPlay": [
+          { "op": "choosePlayer", "as": "t", "from": "others" },
+          { "op": "reveal", "zone": "hand:$t", "to": "self" },
+          { "op": "status", "who": "self", "id": "protected", "until": "ownNextTurn" }
+        ]
+      }
+    ]
+  }
+}

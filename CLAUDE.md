@@ -44,10 +44,11 @@ network, no clock, seeded RNG, plain-JSON state. Only the host runs it.
 - `viewFor(state, seat)` must never include a hidden card the seat does not know.
   Simulation tests assert this.
 - Rules decisions for each game live in `docs/rules/`:
-  [power-hungry-pets.md](docs/rules/power-hungry-pets.md),
-  [exploding-kittens.md](docs/rules/exploding-kittens.md) and
-  [power-hungry-pets-addons.md](docs/rules/power-hungry-pets-addons.md) (the example addon
-  zips). Change the file together with its pack.
+  [power-hungry-pets.md](docs/rules/power-hungry-pets.md) (with its three addons) and
+  [exploding-kittens.md](docs/rules/exploding-kittens.md). Change the file together with its
+  pack.
+- [docs/TUTORIAL.md](docs/TUTORIAL.md) quotes the Power Hungry Pets addons and
+  `examples/my-first-addon`. `src/packs/tutorial.test.ts` checks the quotes; keep them in step.
 - Reaction windows are timed by the host's clock only. The engine gets `now` with inputs and
   never reads a clock itself.
 
@@ -72,8 +73,8 @@ network, no clock, seeded RNG, plain-JSON state. Only the host runs it.
 - `e2e` browser tests (`*.e2e.ts`), several local-mode tabs acting as players
 - `.github/workflows` CI on pull requests, GitHub Pages deploy on `main`
 - `public/packs` built-in packs, one folder each, listed in `public/packs/index.json`
-- `examples/addons` addons to upload as a zip, not built in: two for Power Hungry Pets. A zip is
-  a game (`pack.json`) or an addon for a game the lobby has (`addon.json` with `extends`)
+- `examples/my-first-addon` the tutorial's addon, to upload as a zip. A zip is a game
+  (`pack.json`) or an addon for a game the lobby has (`addon.json` with `extends`)
 - `scripts/zip-pack.mjs` zips a pack folder, no dependencies
 
 ## Testing locally

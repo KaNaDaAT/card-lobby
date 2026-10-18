@@ -13,7 +13,7 @@ async function zipOfPets(request: APIRequestContext, change: (pack: Pack) => voi
     const text = await (await request.get(base + path)).text();
     files[path] = text;
     const addon = JSON.parse(text) as Addon;
-    if (addon.image) paths.add(addon.image);
+    for (const image of [addon.image, ...(addon.cards?.add ?? []).map((c) => c.image)]) if (image) paths.add(image);
   }
   for (const path of paths) files[path] = await (await request.get(base + path)).text();
   change(pack);

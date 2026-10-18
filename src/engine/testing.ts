@@ -5,8 +5,8 @@
 import petsJson from '../../public/packs/power-hungry-pets/pack.json';
 import bigLitterJson from '../../public/packs/power-hungry-pets/addons/big-litter.json';
 import kittensJson from '../../public/packs/exploding-kittens/pack.json';
-import offTheScaleJson from '../../examples/addons/off-the-scale/addon.json';
-import secondLitterJson from '../../examples/addons/second-litter/addon.json';
+import offTheScaleJson from '../../public/packs/power-hungry-pets/addons/off-the-scale.json';
+import secondLitterJson from '../../public/packs/power-hungry-pets/addons/second-litter.json';
 import { mergeAddons } from '../packs/merge';
 import type { Addon, OptionValue, Pack } from '../packs/types';
 import { apply, startGame, viewFor } from './index';
@@ -14,18 +14,12 @@ import type { GameState, GameView, Input, Seat } from './types';
 
 export const petsBase = petsJson as unknown as Pack;
 export const bigLitter = bigLitterJson as unknown as Addon;
+/** Every Power Hungry Pets addon, in the pack's order. */
+export const petsAddons = [bigLitterJson, offTheScaleJson, secondLitterJson] as unknown as Addon[];
 export const kittens = kittensJson as unknown as Pack;
 
 export function petsPack(addons: string[] = []): Pack {
-  return mergeAddons(petsBase, [bigLitter], addons);
-}
-
-/** The example addons that come in their own zips (examples/addons), after Big Litter. */
-export const houseAddons = [offTheScaleJson, secondLitterJson] as unknown as Addon[];
-
-/** Power Hungry Pets with the example addons. Their image paths stay unprefixed here. */
-export function wildPack(addons: string[] = ['off-the-scale', 'second-litter']): Pack {
-  return mergeAddons(petsBase, [bigLitter, ...houseAddons], addons);
+  return mergeAddons(petsBase, petsAddons, addons);
 }
 
 export const PLAYER_NAMES = ['Ann', 'Ben', 'Cat', 'Dan', 'Eve', 'Fay', 'Gus', 'Hal', 'Ivy', 'Jon'];

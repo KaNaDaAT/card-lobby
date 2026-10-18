@@ -10,8 +10,8 @@ Card games with friends, right in the browser. One person creates a lobby, the o
 link or code, everyone chats and plays. Peer to peer and encrypted, no accounts, no game server.
 
 Games are data packs: a `pack.json` with cards and rules, plus images. Addons work like DLC and
-can add, remove or change cards and rules. Two games ship with it: Power Hungry Pets and
-Exploding Kittens.
+can add, remove or change cards and rules. Two games ship with it: Power Hungry Pets (with three
+addons: Big Litter, Off the Scale and Second Litter) and Exploding Kittens.
 
 **Status:** playable and deployable (milestones 1 to 7). Create a lobby, invite friends, chat,
 and play full games of Power Hungry Pets or Exploding Kittens (combos and a timed Nope window
@@ -58,23 +58,23 @@ an account meant for your group.
 
 ## Make your own pack
 
-Copy `public/packs/power-hungry-pets` (or `exploding-kittens` for a draw-and-react game),
-change `pack.json` and the art, zip the folder, and pick the zip with the Custom pack tile in
-the lobby. The lobby lists any problems with their file and path. [docs/PACK_FORMAT.md](docs/PACK_FORMAT.md) describes every field and op.
+Packs are JSON and images, no code. A zip is either a whole game (`pack.json`) or an addon for
+a game the lobby has (`addon.json` that names the game in `extends`). Pick it with the Custom
+pack tile in the lobby; the lobby lists any problems with their file and path.
 
-A zip can also be just an addon for a game the lobby has: an `addon.json` that names the game
-in `extends`, plus its images. It joins that game's addons.
-
-`npm run zip-pack -- <folder>` zips a game or addon folder the way the lobby expects. To try
-it, zip the two example addons for Power Hungry Pets in `examples/addons`: Off the Scale (a -1
-that turns the round upside down and an ∞ that calls last call) and Second Litter (a new pet
-for each number from 1 to 8). Their rules are in
-[docs/rules/power-hungry-pets-addons.md](docs/rules/power-hungry-pets-addons.md).
+**[docs/TUTORIAL.md](docs/TUTORIAL.md)** walks you through it: your first addon, changing cards
+and rules, and a whole new game. Its worked examples are the two house addons that ship with
+Power Hungry Pets, Off the Scale (a -1 that turns the round upside down and an ∞ that calls
+last call) and Second Litter (a new pet for each number from 1 to 8), and its hands-on example
+is in [examples/my-first-addon](examples/my-first-addon). `npm run zip-pack -- <folder>` zips
+a game or addon folder the way the lobby expects. [docs/PACK_FORMAT.md](docs/PACK_FORMAT.md)
+lists every field and op.
 
 ## Docs
 
+- [docs/TUTORIAL.md](docs/TUTORIAL.md): make your own addon or game, step by step
 - [docs/DESIGN.md](docs/DESIGN.md): architecture, networking, engine, disconnects, custom packs
-- [docs/PACK_FORMAT.md](docs/PACK_FORMAT.md): how to write a pack or an addon
+- [docs/PACK_FORMAT.md](docs/PACK_FORMAT.md): every field, op and condition of a pack or addon
 - [docs/ROADMAP.md](docs/ROADMAP.md): milestones and what is done
 - [docs/rules/power-hungry-pets.md](docs/rules/power-hungry-pets.md) and
   [docs/rules/exploding-kittens.md](docs/rules/exploding-kittens.md): rules as implemented,

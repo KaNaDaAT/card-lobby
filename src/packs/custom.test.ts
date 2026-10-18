@@ -28,7 +28,7 @@ describe('importPackZip', () => {
     const hash = await sha256Hex(zip);
     expect(lp.key).toBe(customKey(hash));
     expect(lp.pack.id).toBe('power-hungry-pets');
-    expect(lp.addons.map((a) => a.id)).toEqual(['big-litter']);
+    expect(lp.addons.map((a) => a.id)).toEqual(['big-litter', 'off-the-scale', 'second-litter']);
     expect(lp.custom?.offer).toEqual({
       hash,
       kind: 'game',

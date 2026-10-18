@@ -3,7 +3,10 @@
 A pack is one game: its cards, its rules, its art, and its addons. Packs are data only. The
 engine ships a fixed set of ops (building blocks), and packs combine them.
 
-Reference packs: [public/packs/power-hungry-pets](../public/packs/power-hungry-pets) and
+New to packs? Start with [TUTORIAL.md](TUTORIAL.md). This file is the reference.
+
+Reference packs: [public/packs/power-hungry-pets](../public/packs/power-hungry-pets) (its
+addons show card changes, flags, statuses and a replaced turn) and
 [public/packs/exploding-kittens](../public/packs/exploding-kittens) (combos, reactions, extra
 turns, `onDraw`).
 
@@ -316,7 +319,8 @@ my-addon/
 - Errors name it by its name, like `Second Litter/addon.json: cards.penguin-parade.onPlay[1]:
   unknown op "passhands"`.
 
-Examples: [examples/addons](../examples/addons), two addons for Power Hungry Pets.
+Example: [examples/my-first-addon](../examples/my-first-addon), the addon built in
+[TUTORIAL.md](TUTORIAL.md).
 
 ## Validation
 

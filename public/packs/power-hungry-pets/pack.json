@@ -234,5 +234,5 @@
       ]
     }
   ],
-  "addons": ["addons/big-litter.json"]
+  "addons": ["addons/big-litter.json", "addons/off-the-scale.json", "addons/second-litter.json"]
 }

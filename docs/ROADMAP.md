@@ -126,8 +126,10 @@ someone wants them.
 - [x] Addon zips: a zip is a game or an addon for a game the lobby has. Uploaded addons join
   their game, are offered to players with the game in one consent card, and come back from the
   cache. Protocol version 3.
-- [x] Two example addon zips for Power Hungry Pets: Off the Scale (-1 and ∞) and Second
-  Litter (a new pet for 1 to 8). `npm run zip-pack` builds the zips.
+- [x] Two house addons for Power Hungry Pets, now built in: Off the Scale (-1 and ∞) and
+  Second Litter (a new pet for 1 to 8).
+- [x] A tutorial for making packs ([TUTORIAL.md](TUTORIAL.md)), with a hands-on example addon
+  in `examples/my-first-addon`. `npm run zip-pack` zips game and addon folders.
 - [x] Format additions they needed: `valueLabel`, round `flags` with the `flag` op and
   condition, `showdown.lowestWins`, a showdown called early from a card, `passHands`, and
   `except` for choosing players.

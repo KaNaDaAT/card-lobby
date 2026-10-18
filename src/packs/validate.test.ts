@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bigLitter, petsBase } from '../engine/testing';
+import { bigLitter, petsAddons, petsBase } from '../engine/testing';
 import type { Addon, LoadedPack, Pack } from './types';
 import { validateAddon, validatePack, validateSelection, versionAtMost } from './validate';
 
@@ -16,10 +16,15 @@ function petsWith(change: (p: Pack & Record<string, unknown>) => void): Pack {
 const card = (p: Pack, id: string) => p.cards.find((c) => c.id === id)!;
 
 describe('validatePack', () => {
-  it('accepts Power Hungry Pets, alone and with Big Litter', () => {
+  it('accepts Power Hungry Pets, alone and with each set of its addons', () => {
     expect(validatePack(petsBase)).toEqual([]);
     expect(validateSelection(lp(petsBase, [bigLitter]), [])).toEqual([]);
     expect(validateSelection(lp(petsBase, [bigLitter]), ['big-litter'])).toEqual([]);
+    const ids = petsAddons.map((a) => a.id);
+    for (let mask = 1; mask < 1 << ids.length; mask++) {
+      const enabled = ids.filter((_, i) => mask & (1 << i));
+      expect(validateSelection(lp(petsBase, petsAddons), enabled), enabled.join('+')).toEqual([]);
+    }
   });
 
   it('rejects unknown and planned ops with the path', () => {
