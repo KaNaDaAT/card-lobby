@@ -53,7 +53,9 @@ network, no clock, seeded RNG, plain-JSON state. Only the host runs it.
   `checkSetup`), `interpreter.ts` runs frames, `ops/` is the fixed op list, `round.ts` rounds,
   turns, showdown and scoring, `view.ts` per-seat views, `testing.ts` and `simulate.ts` test
   harnesses
-- `src/packs` pack types, loading, counts, addon merging, validation
+- `src/packs` pack types, loading, counts, addon merging, validation, and custom packs: `zip.ts`
+  (minimal reader), `custom.ts` (import a zip, blob URLs, SHA-256), `cache.ts` (IndexedDB by
+  hash, per `?as=` slot), `loader.ts` (cache first, then a checked download)
 - `src/ui` DOM helper, router, components, screens
 - `src/identity.ts` local player id, name, color, host marker
 - `src/styles` design tokens (light and dark) and app styles

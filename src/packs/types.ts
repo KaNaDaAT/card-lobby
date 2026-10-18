@@ -138,10 +138,24 @@ export interface Addon {
   };
 }
 
+/** What players are shown before they accept a custom pack. */
+export interface PackOffer {
+  /** SHA-256 of the zip, hex. */
+  hash: string;
+  name: string;
+  author?: string;
+  bytes: number;
+  images: number;
+}
+
 /** A pack as loaded by the app: data plus where its files live. */
 export interface LoadedPack {
+  /** How the lobby names the pack: its id when built in, `custom:<hash>` when uploaded. */
+  key: string;
   pack: Pack;
   addons: Addon[];
   /** Turns a path from the pack files into a URL the page can load. */
   asset(path: string): string;
+  /** Uploaded packs keep their zip, to send to other players. */
+  custom?: { bytes: Uint8Array; offer: PackOffer };
 }

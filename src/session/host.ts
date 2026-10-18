@@ -12,17 +12,20 @@ import {
   ACTION,
   CHAT_HISTORY,
   CHAT_MAX_LENGTH,
+  MAX_BYTES,
   PROTOCOL_VERSION,
   type ChatMessage,
   type ChatPayload,
   type Hello,
   type Intent,
   type LobbyView,
+  type PackReply,
+  type PackStatus,
   type View,
 } from '../net/protocol';
 import type { Channel, Transport } from '../net/transport';
 import { mergeAddons } from '../packs/merge';
-import type { LoadedPack, OptionValue, Pack } from '../packs/types';
+import type { LoadedPack, OptionValue, Pack, PackOffer } from '../packs/types';
 import { validateSelection } from '../packs/validate';
 import { mergeSelection, optionValueOk, startBlocked, type Selection } from './lobby';
 import type { Session, SessionState } from './types';
@@ -79,18 +82,21 @@ interface Snapshot {
 
 const randomSeed = () => crypto.getRandomValues(new Uint32Array(1))[0]!;
 
+/** How often the host sends one player the same pack, so a broken client cannot loop it. */
+const MAX_TRANSFERS = 3;
+
 export class HostSession implements Session {
   readonly isHost = true;
   readonly playerId: string;
 
   private readonly code: string;
   private readonly transport: Transport;
-  private readonly packs: LoadedPack[];
+  private packs: LoadedPack[];
   private readonly store: SnapshotStore | undefined;
   private readonly now: () => number;
   private readonly seed: () => number;
   private readonly listeners = new Set<() => void>();
-  private readonly out: { view: Channel<View>; chat: Channel<ChatPayload> };
+  private readonly out: { view: Channel<View>; chat: Channel<ChatPayload>; packOffer: Channel<PackOffer>; packData: Channel<Uint8Array> };
   private readonly validation = new Map<string, string[]>();
 
   private members: Member[];
@@ -102,11 +108,15 @@ export class HostSession implements Session {
   private seq = 0;
   private chatCounter = 0;
   private ownView: View | null = null;
+  /** Where each member stands with the active custom pack, by playerId. */
+  private packStatus = new Map<string, PackStatus>();
+  /** How often each member got the active custom pack, by playerId. */
+  private transfers = new Map<string, number>();
 
   constructor(opts: HostOptions) {
     this.code = opts.code;
     this.transport = opts.transport;
-    this.packs = opts.packs;
+    this.packs = [...opts.packs];
     this.store = opts.store;
     this.now = opts.now ?? Date.now;
     this.seed = opts.seed ?? randomSeed;
@@ -115,7 +125,19 @@ export class HostSession implements Session {
     this.members = [self];
 
     const t = this.transport;
-    this.out = { view: t.channel<View>(ACTION.view), chat: t.channel<ChatPayload>(ACTION.chat) };
+    this.out = {
+      view: t.channel<View>(ACTION.view),
+      chat: t.channel<ChatPayload>(ACTION.chat),
+      packOffer: t.channel<PackOffer>(ACTION.packOffer),
+      packData: t.channel<Uint8Array>(ACTION.packData),
+    };
+    // Nothing a client sends is big. Drop anything that is.
+    const inbound = <T>(name: string, max: number) => {
+      const ch = t.channel<T>(name);
+      ch.guard((bytes) => bytes <= max);
+      return ch;
+    };
+    t.channel<unknown>(ACTION.packData).guard(() => false);
 
     const saved = this.restore();
     if (saved) {
@@ -130,17 +152,22 @@ export class HostSession implements Session {
     } else {
       this.system('Lobby created. Share the link or code to invite friends.');
     }
-    if (!this.loadedPack() && this.packs[0]) this.selectPack(this.packs[0].pack.id);
+    if (!this.loadedPack() && this.packs[0]) this.selectPack(this.packs[0].key);
 
-    t.channel<unknown>(ACTION.hello).onMessage((data, from) => this.onHello(data, from));
-    t.channel<unknown>(ACTION.say).onMessage((data, from) => {
+    inbound<unknown>(ACTION.hello, MAX_BYTES.hello).onMessage((data, from) => this.onHello(data, from));
+    inbound<unknown>(ACTION.say, MAX_BYTES.say).onMessage((data, from) => {
       const member = this.memberByPeer(from);
       if (member) this.addChat(member, data);
     });
-    t.channel<unknown>(ACTION.intent).onMessage((data, from) => {
+    inbound<unknown>(ACTION.intent, MAX_BYTES.intent).onMessage((data, from) => {
       const member = this.memberByPeer(from);
       const intent = parseIntent(data);
       if (member && intent) this.handle(member, intent);
+    });
+    inbound<unknown>(ACTION.packReply, MAX_BYTES.packReply).onMessage((data, from) => {
+      const member = this.memberByPeer(from);
+      const reply = parsePackReply(data);
+      if (member && reply) this.onPackReply(member, reply);
     });
     t.onPeerLeave((peerId) => this.onPeerLeave(peerId));
 
@@ -150,7 +177,8 @@ export class HostSession implements Session {
   // ---------- Session ----------
 
   state(): SessionState {
-    return { status: 'connected', view: this.ownView, chat: this.chat };
+    const active = this.activePack();
+    return { status: 'connected', view: this.ownView, chat: this.chat, customPack: active?.custom ? active : null, packOffer: null };
   }
 
   subscribe(cb: () => void): () => void {
@@ -164,6 +192,30 @@ export class HostSession implements Session {
 
   act(intent: Intent): void {
     this.handle(this.members[0]!, intent);
+  }
+
+  answerPackOffer(): void {
+    // The host already has every pack it offers.
+  }
+
+  availablePacks(): LoadedPack[] {
+    return [...this.packs];
+  }
+
+  /** Adds an uploaded pack to the gallery. Selecting it is up to the host. */
+  addPack(lp: LoadedPack): void {
+    if (this.packs.some((p) => p.key === lp.key)) return;
+    this.packs.push(lp);
+    this.notify();
+  }
+
+  /** Takes an uploaded pack out of the gallery, unless it is in use. */
+  removePack(key: string): boolean {
+    const lp = this.packs.find((p) => p.key === key);
+    if (!lp?.custom || this.packId === key || this.game?.packId === key) return false;
+    this.packs = this.packs.filter((p) => p !== lp);
+    this.notify();
+    return true;
   }
 
   leave(): void {
@@ -199,6 +251,8 @@ export class HostSession implements Session {
     // View first: clients lock onto the host by its first view and ignore chat before that.
     this.broadcast();
     void this.out.chat.send({ messages: this.chat, history: true }, peerId);
+    // A fresh page has no pack loaded yet, even if it said yes before. Offer again.
+    this.offerPack(member);
   }
 
   private onPeerLeave(peerId: string): void {
@@ -256,14 +310,52 @@ export class HostSession implements Session {
         break;
     }
     if (changed) this.broadcast();
+    if (changed && intent.kind === 'selectPack') for (const m of this.members) this.offerPack(m);
   }
 
   private selectPack(packId: string): boolean {
-    if (!this.packs.some((p) => p.pack.id === packId)) return false;
+    if (!this.packs.some((p) => p.key === packId)) return false;
     this.packId = packId;
     this.addons = [];
     this.options = {};
+    this.packStatus.clear();
+    this.transfers.clear();
     return true;
+  }
+
+  // ---------- Custom packs ----------
+
+  /** Offers the active custom pack to a member. Someone who declined stays declined until they answer. */
+  private offerPack(member: Member): void {
+    const offer = this.activePack()?.custom?.offer;
+    if (!offer || member === this.members[0] || !member.peerId) return;
+    if (this.packStatus.get(member.playerId) !== 'declined') this.packStatus.set(member.playerId, 'offered');
+    void this.out.packOffer.send(offer, member.peerId);
+  }
+
+  private onPackReply(member: Member, reply: PackReply): void {
+    const custom = this.activePack()?.custom;
+    if (!custom || reply.hash !== custom.offer.hash || member === this.members[0] || !member.peerId) return;
+    const id = member.playerId;
+    if (reply.accept && reply.cached) {
+      this.packStatus.set(id, 'ready');
+    } else if (reply.accept) {
+      // One transfer at a time, and only a few per player.
+      const sent = this.transfers.get(id) ?? 0;
+      if (this.packStatus.get(id) === 'downloading' || sent >= MAX_TRANSFERS) return;
+      this.transfers.set(id, sent + 1);
+      this.packStatus.set(id, 'downloading');
+      void this.out.packData.send(custom.bytes, member.peerId);
+    } else {
+      this.packStatus.set(id, reply.error ? 'failed' : 'declined');
+      if (reply.error) this.system(`${member.name} could not load the pack: ${reply.error}`);
+    }
+    this.broadcast();
+  }
+
+  private packStatusOf(member: Member): PackStatus {
+    if (member === this.members[0] || !this.activePack()?.custom) return 'ready';
+    return this.packStatus.get(member.playerId) ?? 'offered';
   }
 
   private toggleAddon(addonId: string, on: boolean): boolean {
@@ -310,7 +402,7 @@ export class HostSession implements Session {
       options: this.options,
       seed: this.seed(),
     });
-    this.game = { packId: lp.pack.id, addons: [...this.addons], pack: selection.pack, state };
+    this.game = { packId: lp.key, addons: [...this.addons], pack: selection.pack, state };
     this.system(`The game begins: ${selection.pack.name}.`);
     return true;
   }
@@ -390,7 +482,13 @@ export class HostSession implements Session {
   // ---------- Views ----------
 
   private loadedPack(): LoadedPack | undefined {
-    return this.packs.find((p) => p.pack.id === this.packId);
+    return this.packs.find((p) => p.key === this.packId);
+  }
+
+  /** The pack in use: the running game's, or the one picked in the lobby. */
+  private activePack(): LoadedPack | undefined {
+    const key = this.game?.packId ?? this.packId;
+    return this.packs.find((p) => p.key === key);
   }
 
   private selection(): Selection | null {
@@ -398,10 +496,11 @@ export class HostSession implements Session {
     return lp ? mergeSelection(lp, this.addons) : null;
   }
 
-  /** Members who would get a seat if the game started now, in seat order. */
+  /** Members who would get a seat if the game started now, in seat order. Who declined the pack watches. */
   private seated(selection: Selection | null): Member[] {
     const max = selection?.pack?.players.max ?? this.members.length;
-    return this.members.slice(0, max);
+    const status = (m: Member) => this.packStatusOf(m);
+    return this.members.filter((m) => status(m) !== 'declined' && status(m) !== 'failed').slice(0, max);
   }
 
   private seatOf(playerId: string): Seat | null {
@@ -413,7 +512,7 @@ export class HostSession implements Session {
   private packProblems(): string[] {
     const lp = this.loadedPack();
     if (!lp) return [];
-    const key = `${lp.pack.id}|${[...this.addons].sort().join(',')}`;
+    const key = `${lp.key}|${[...this.addons].sort().join(',')}`;
     let errors = this.validation.get(key);
     if (!errors) {
       errors = validateSelection(lp, this.addons);
@@ -425,7 +524,7 @@ export class HostSession implements Session {
   private startProblem(selection: Selection | null, seated: Member[]): string | null {
     return startBlocked(
       selection,
-      seated.map((m) => ({ playerId: m.playerId, name: m.name, connected: m.peerId !== null })),
+      seated.map((m) => ({ playerId: m.playerId, name: m.name, connected: m.peerId !== null, packReady: this.packStatusOf(m) === 'ready' })),
       this.packProblems(),
     );
   }
@@ -454,12 +553,12 @@ export class HostSession implements Session {
         connected: m.peerId !== null,
         isHost: m === this.members[0],
         role: seated.has(m.playerId) ? 'player' : 'spectator',
-        packReady: true,
+        pack: this.packStatusOf(m),
       })),
       packId: game?.packId ?? this.packId,
       addons: [...(game?.addons ?? this.addons)],
       options: game ? { ...game.state.options } : { ...this.options },
-      customPack: null,
+      customPack: this.activePack()?.custom?.offer ?? null,
       startBlocked: game ? this.nextRoundProblem(game.state) : this.startProblem(selection, this.seated(selection)),
     };
   }
@@ -517,7 +616,7 @@ export class HostSession implements Session {
 
   /** Rebuilds a saved game. Everyone but the host counts as away until they say hello. */
   private resumeGame(saved: Snapshot['game'] | undefined): Game | null {
-    const lp = saved && this.packs.find((p) => p.pack.id === saved.packId);
+    const lp = saved && this.packs.find((p) => p.key === saved.packId);
     if (!saved || !lp) return null;
     try {
       const game: Game = { ...saved, pack: mergeAddons(lp.pack, lp.addons, saved.addons) };
@@ -550,6 +649,16 @@ export function parseHello(data: unknown): Hello | null {
   }
   const packs = Array.isArray(cachedPacks) ? cachedPacks.filter((h): h is string => isStr(h, 128)).slice(0, 100) : [];
   return { protocol, playerId, name: name.slice(0, 200), color, cachedPacks: packs };
+}
+
+function parsePackReply(data: unknown): PackReply | null {
+  if (!isObj(data) || !isStr(data.hash, 64) || typeof data.accept !== 'boolean') return null;
+  return {
+    hash: data.hash,
+    accept: data.accept,
+    cached: data.cached === true,
+    ...(isStr(data.error, 300) ? { error: data.error } : {}),
+  };
 }
 
 /** Answers are checked against the open prompt by the engine. Here only their size is capped. */

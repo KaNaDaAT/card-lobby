@@ -1,8 +1,9 @@
 /**
  * In-memory network for tests. Nothing is delivered until `flush()` runs, so tests decide
- * exactly when messages arrive. Payloads are cloned on send, like a real wire would.
+ * exactly when messages arrive. Payloads are cloned on send, like a real wire would, and
+ * guards see their size.
  */
-import type { Channel, Transport } from './transport';
+import { payloadSize, type Channel, type Transport } from './transport';
 
 type Listener = (data: unknown, from: string) => void;
 
@@ -10,7 +11,7 @@ interface Peer {
   id: string;
   joins: ((peerId: string) => void)[];
   leaves: ((peerId: string) => void)[];
-  channels: Map<string, Listener[]>;
+  channels: Map<string, { listeners: Listener[]; guards: ((bytes: number, from: string) => boolean)[] }>;
   gone: boolean;
 }
 
@@ -55,25 +56,34 @@ export function createMemoryNetwork(): MemoryNetwork {
         onPeerJoin: (cb) => void self.joins.push(cb),
         onPeerLeave: (cb) => void self.leaves.push(cb),
         channel<T>(name: string): Channel<T> {
-          const listeners = self.channels.get(name) ?? [];
-          self.channels.set(name, listeners);
+          const ch = self.channels.get(name) ?? { listeners: [], guards: [] };
+          self.channels.set(name, ch);
           return {
             send(data: T, to?: string | string[]) {
               if (self.gone) return Promise.resolve();
               const targets = to === undefined ? [...peers.keys()] : Array.isArray(to) ? to : [to];
-              const wire = JSON.stringify(data);
+              const size = payloadSize(data);
               for (const target of targets) {
                 if (target === self.id) continue;
+                const copy = structuredClone(data);
                 queue.push(() => {
                   const peer = peers.get(target);
-                  if (!peer || peer.gone || self.gone) return;
-                  for (const cb of peer.channels.get(name) ?? []) cb(JSON.parse(wire), self.id);
+                  const theirs = peer?.channels.get(name);
+                  if (!peer || !theirs || peer.gone || self.gone) return;
+                  if (!theirs.guards.every((g) => g(size, self.id))) return;
+                  for (const cb of theirs.listeners) cb(copy, self.id);
                 });
               }
               return Promise.resolve();
             },
             onMessage(cb) {
-              listeners.push(cb as Listener);
+              ch.listeners.push(cb as Listener);
+            },
+            onProgress() {
+              // Delivered at once.
+            },
+            guard(check) {
+              ch.guards.push(check);
             },
           };
         },

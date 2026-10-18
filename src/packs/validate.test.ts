@@ -4,7 +4,7 @@ import type { Addon, LoadedPack, Pack } from './types';
 import { validateAddon, validatePack, validateSelection, versionAtMost } from './validate';
 
 const clone = <T>(v: T): T => structuredClone(v);
-const lp = (pack: Pack, addons: Addon[] = []): LoadedPack => ({ pack, addons, asset: (p) => p });
+const lp = (pack: Pack, addons: Addon[] = []): LoadedPack => ({ key: pack.id, pack, addons, asset: (p) => p });
 
 /** A copy of Power Hungry Pets with one change applied. */
 function petsWith(change: (p: Pack & Record<string, unknown>) => void): Pack {

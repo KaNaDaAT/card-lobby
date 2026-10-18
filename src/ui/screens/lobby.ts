@@ -9,26 +9,44 @@ import { resolveCount } from '../../packs/count';
 import { addonProblems } from '../../packs/merge';
 import type { Count, LoadedPack, OptionDef, OptionValue } from '../../packs/types';
 import { AUTO, mergeSelection } from '../../session/lobby';
+import type { HostSession } from '../../session/host';
 import type { Session } from '../../session/types';
 import { avatar, pill, section } from '../components/bits';
 import { cardFace } from '../components/card';
+import { packBadge, packConsent, removeUpload, uploadProblems, uploadTile } from '../components/packs';
 import { h, type Child } from '../dom';
 
 export interface RoomCtx {
   session: Session;
+  /** The same session when this page hosts, for host-only actions like uploads. */
+  host: HostSession | null;
   me: Identity;
+  /** Built-in packs. */
   packs: LoadedPack[];
+  /** The host's last pack upload. */
+  upload: { busy: boolean; problems: string[] };
   /** Redraws the room, for changes to local state that no view brings. */
   redraw(): void;
 }
 
+/** The pack the lobby uses, if this page has it: a built-in one, or the custom pack once loaded. */
+export function resolvePack(ctx: RoomCtx, lobby: LobbyView): LoadedPack | undefined {
+  if (lobby.customPack) {
+    const custom = ctx.session.state().customPack;
+    return custom?.custom?.offer.hash === lobby.customPack.hash ? custom : undefined;
+  }
+  return ctx.packs.find((p) => p.key === lobby.packId);
+}
+
 export function lobbyMain(ctx: RoomCtx, lobby: LobbyView): Child[] {
-  const lp = ctx.packs.find((p) => p.pack.id === lobby.packId);
+  const lp = resolvePack(ctx, lobby);
   return [
     ctx.session.isHost ? gallery(ctx, lobby) : null,
     lp
       ? gameDetail(ctx, lobby, lp)
-      : h(
+      : lobby.customPack
+        ? packConsent(ctx, lobby)
+        : h(
           'section',
           { class: 'panel waiting' },
           h('h2', null, lobby.packId ? 'Unknown game' : 'No game picked yet'),
@@ -38,43 +56,37 @@ export function lobbyMain(ctx: RoomCtx, lobby: LobbyView): Child[] {
 }
 
 function gallery(ctx: RoomCtx, lobby: LobbyView): HTMLElement {
+  const tiles = ctx.session.availablePacks().map((p) => {
+    const tile = h(
+      'button',
+      {
+        type: 'button',
+        class: 'tile',
+        'aria-pressed': String(p.key === lobby.packId),
+        onclick: () => ctx.session.act({ kind: 'selectPack', packId: p.key }),
+      },
+      h('img', { class: 'tile-img', src: p.asset(p.pack.art.cover), alt: '' }),
+      h(
+        'span',
+        { class: 'tile-body' },
+        h('span', { class: 'tile-name' }, p.pack.name),
+        h('span', { class: 'tile-meta' }, `${p.pack.players.min} to ${p.pack.players.max} players`, p.custom ? ' · Custom' : ''),
+      ),
+    );
+    if (!p.custom || p.key === lobby.packId) return tile;
+    return h(
+      'div',
+      { class: 'tile-wrap' },
+      tile,
+      h('button', { type: 'button', class: 'btn btn-xs tile-remove', title: `Remove ${p.pack.name} from this browser`, onclick: () => removeUpload(ctx, p) }, 'Remove'),
+    );
+  });
   return h(
     'section',
     { class: 'panel' },
     h('div', { class: 'panel-head' }, h('h2', null, 'Choose a game')),
-    h(
-      'div',
-      { class: 'gallery' },
-      ctx.packs.map((p) =>
-        h(
-          'button',
-          {
-            type: 'button',
-            class: 'tile',
-            'aria-pressed': String(p.pack.id === lobby.packId),
-            onclick: () => ctx.session.act({ kind: 'selectPack', packId: p.pack.id }),
-          },
-          h('img', { class: 'tile-img', src: p.asset(p.pack.art.cover), alt: '' }),
-          h(
-            'span',
-            { class: 'tile-body' },
-            h('span', { class: 'tile-name' }, p.pack.name),
-            h('span', { class: 'tile-meta' }, `${p.pack.players.min} to ${p.pack.players.max} players`),
-          ),
-        ),
-      ),
-      h(
-        'div',
-        { class: 'tile tile-custom', 'aria-disabled': 'true' },
-        h('span', { class: 'tile-img tile-plus', 'aria-hidden': 'true' }),
-        h(
-          'span',
-          { class: 'tile-body' },
-          h('span', { class: 'tile-name' }, 'Custom pack'),
-          h('span', { class: 'tile-meta' }, 'Upload a .zip (milestone 5)'),
-        ),
-      ),
-    ),
+    h('div', { class: 'gallery' }, tiles, uploadTile(ctx)),
+    uploadProblems(ctx),
   );
 }
 
@@ -241,7 +253,7 @@ function optionControl(
 }
 
 export function playersPanel(ctx: RoomCtx, lobby: LobbyView, game: GameView | null = null): HTMLElement {
-  const lp = ctx.packs.find((p) => p.pack.id === lobby.packId);
+  const lp = resolvePack(ctx, lobby);
   const max = lp ? (mergeSelection(lp, lobby.addons).pack ?? lp.pack).players.max : undefined;
   const isHost = ctx.session.isHost;
   // Watchers who could take over an away player's seat.
@@ -284,6 +296,7 @@ export function playersPanel(ctx: RoomCtx, lobby: LobbyView, game: GameView | nu
       p.isHost ? h('span', { class: 'badge' }, 'Host') : null,
       p.playerId === ctx.me.playerId ? h('span', { class: 'badge badge-soft' }, 'You') : null,
       p.role === 'spectator' ? h('span', { class: 'badge badge-soft' }, 'Watching') : null,
+      lobby.customPack ? packBadge(p.pack) : null,
       actions,
       handOver,
       h('span', { class: `conn${p.connected ? ' on' : ''}`, title: p.connected ? 'Connected' : 'Away' }),

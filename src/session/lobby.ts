@@ -42,6 +42,7 @@ export interface LobbyMember {
   playerId: string;
   name: string;
   connected: boolean;
+  packReady: boolean;
 }
 
 /**
@@ -62,5 +63,7 @@ export function startBlocked(
   if (n < pack.players.min) return `Needs at least ${pack.players.min} players, ${n} here.`;
   const away = players.find((p) => !p.connected);
   if (away) return `Waiting for ${away.name} to come back.`;
+  const missing = players.find((p) => !p.packReady);
+  if (missing) return `Waiting for ${missing.name} to get the pack.`;
   return null;
 }

@@ -10,6 +10,7 @@ import { HostSession, parseIntent, type SnapshotStore } from './host';
 
 const CODE = 'ABCDEFGH';
 const pets: LoadedPack = {
+  key: 'power-hungry-pets',
   pack: petsJson as unknown as Pack,
   addons: [bigLitterJson as unknown as Addon],
   asset: (p) => p,

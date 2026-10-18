@@ -7,7 +7,7 @@
  * in front, every tab keeps hearing from every other one. A tab that goes quiet for
  * `LOST_AFTER_MS` counts as gone. Closing a tab says goodbye at once.
  */
-import type { Channel, Transport } from './transport';
+import { payloadSize, type Channel, type Transport } from './transport';
 
 const BEAT_MS = 2000;
 const LOST_AFTER_MS = 10_000;
@@ -23,7 +23,10 @@ export function joinLocalRoom(code: string): Transport {
   const lastSeen = new Map<string, number>();
   const joins: ((peerId: string) => void)[] = [];
   const leaves: ((peerId: string) => void)[] = [];
-  const channels = new Map<string, ((data: unknown, from: string) => void)[]>();
+  const channels = new Map<
+    string,
+    { listeners: ((data: unknown, from: string) => void)[]; guards: ((bytes: number, from: string) => boolean)[] }
+  >();
   let left = false;
 
   const post = (env: Envelope) => {
@@ -52,11 +55,14 @@ export function joinLocalRoom(code: string): Transport {
       case 'bye':
         lost(env.from);
         break;
-      case 'msg':
+      case 'msg': {
         if (env.to && !env.to.includes(selfId)) return;
         seen(env.from);
-        for (const cb of channels.get(env.ch) ?? []) cb(env.data, env.from);
+        const ch = channels.get(env.ch);
+        if (!ch || !ch.guards.every((g) => g(payloadSize(env.data), env.from))) return;
+        for (const cb of ch.listeners) cb(env.data, env.from);
         break;
+      }
     }
   };
 
@@ -77,15 +83,21 @@ export function joinLocalRoom(code: string): Transport {
     onPeerJoin: (cb) => void joins.push(cb),
     onPeerLeave: (cb) => void leaves.push(cb),
     channel<T>(name: string): Channel<T> {
-      const listeners = channels.get(name) ?? [];
-      channels.set(name, listeners);
+      const ch = channels.get(name) ?? { listeners: [], guards: [] };
+      channels.set(name, ch);
       return {
         send(data: T, to?: string | string[]) {
           post({ k: 'msg', from: selfId, ch: name, to: to === undefined ? undefined : [to].flat(), data });
           return Promise.resolve();
         },
         onMessage(cb) {
-          listeners.push(cb as (data: unknown, from: string) => void);
+          ch.listeners.push(cb as (data: unknown, from: string) => void);
+        },
+        onProgress() {
+          // BroadcastChannel delivers at once.
+        },
+        guard(check) {
+          ch.guards.push(check);
         },
       };
     },

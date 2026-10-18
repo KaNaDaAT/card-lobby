@@ -11,7 +11,7 @@ import { avatar, pill } from '../components/bits';
 import { cardBack, cardFace, type CardOpts } from '../components/card';
 import { confirmDialog } from '../components/dialog';
 import { h, type Child } from '../dom';
-import type { RoomCtx } from './lobby';
+import { resolvePack, type RoomCtx } from './lobby';
 
 /** Kept by the room between redraws. */
 export interface TableMemo {
@@ -46,7 +46,7 @@ const WAITING_FOR: Record<PromptKind, string> = {
 };
 
 export function tableMain(ctx: RoomCtx, lobby: LobbyView, game: GameView, memo: TableMemo): Child[] {
-  const lp = ctx.packs.find((p) => p.pack.id === lobby.packId);
+  const lp = resolvePack(ctx, lobby);
   if (!lp) return [h('section', { class: 'panel waiting' }, h('h2', null, 'Unknown game'), h('p', { class: 'muted' }, 'This page does not have the game the host is running.'))];
   const pack = mergeSelection(lp, lobby.addons).pack ?? lp.pack;
   const t: T = {

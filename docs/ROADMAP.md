@@ -81,14 +81,14 @@ Goal: play a full game with friends in tabs.
 - [x] Host reload mid-game resumes from saved state, including mid-prompt.
 - [x] Assign an empty seat to a new device.
 
-## M5: Custom packs
+## M5: Custom packs (done)
 
-- [ ] Zip import on the host (pick a small zip reader, or write a minimal one for stored and
-  deflate entries with `DecompressionStream`).
-- [ ] SHA-256 hash, IndexedDB cache by hash.
-- [ ] `packOffer`, consent card, `packReply`, `packData` with progress.
-- [ ] Size and type limits, enforced in Trystero `onReceive` and after unzip.
-- [ ] Spectator role for players who declined.
+- [x] Zip import on the host (pick a small zip reader, or write a minimal one for stored and
+  deflate entries with `DecompressionStream`). Own reader in `src/packs/zip.ts`.
+- [x] SHA-256 hash, IndexedDB cache by hash.
+- [x] `packOffer`, consent card, `packReply`, `packData` with progress.
+- [x] Size and type limits, enforced in Trystero `onReceive` and after unzip.
+- [x] Spectator role for players who declined.
 
 ## M6: Polish and deploy
 

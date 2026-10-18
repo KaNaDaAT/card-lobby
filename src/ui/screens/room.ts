@@ -8,13 +8,15 @@ import { joinLocalRoom } from '../../net/local';
 import { CHAT_MAX_LENGTH, type ChatMessage, type View } from '../../net/protocol';
 import type { Transport } from '../../net/transport';
 import { loadBuiltInPacks } from '../../packs/load';
+import { browserPackLoader, loadCachedPacks } from '../../packs/loader';
 import { ClientSession } from '../../session/client';
 import { HostSession } from '../../session/host';
 import type { Session, SessionState } from '../../session/types';
 import { avatar, brandMark, pill } from '../components/bits';
 import { h, replace, type Child } from '../dom';
 import { roomLink, type Screen } from '../router';
-import { lobbyMain, playersPanel, type RoomCtx } from './lobby';
+import { packConsent } from '../components/packs';
+import { lobbyMain, playersPanel, resolvePack, type RoomCtx } from './lobby';
 import { logPanel, newTableMemo, tableMain, type TableMemo } from './table';
 
 const DEFAULT_ACCENT = '#9d85ff';
@@ -113,7 +115,7 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
     if (!ctx) return;
     const state = ctx.session.state();
     const view = state.view;
-    const lp = ctx.packs.find((p) => p.pack.id === view?.lobby.packId);
+    const lp = view ? resolvePack(ctx, view.lobby) : undefined;
     const accent = lp?.pack.art.accent;
     room.style.setProperty('--accent', accent && CSS.supports('color', accent) ? accent : DEFAULT_ACCENT);
 
@@ -150,7 +152,9 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
 
   const drawView = (c: RoomCtx, view: View) => {
     if (view.game && view.lobby.phase === 'playing') {
-      replace(mainRegion, tableMain(c, view.lobby, view.game, memo), playersPanel(c, view.lobby, view.game));
+      // Someone who joined a custom game late needs the pack before they can watch.
+      const table = view.lobby.customPack && !resolvePack(c, view.lobby) ? [packConsent(c, view.lobby)] : tableMain(c, view.lobby, view.game, memo);
+      replace(mainRegion, table, playersPanel(c, view.lobby, view.game));
       const log = logPanel(view.game);
       replace(sideRegion, log);
       const lines = log.querySelector('.log');
@@ -184,7 +188,10 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
 
   void (async () => {
     try {
+      const hosting = isHosting(code);
       const packs = await loadBuiltInPacks();
+      // The host's gallery also shows the custom packs this browser has.
+      const custom = hosting ? await loadCachedPacks() : [];
       if (disposed) return;
       // The session must exist before any network event runs, or it misses peer joins.
       const transport = await openTransport(code, local);
@@ -192,16 +199,17 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
         transport.leave();
         return;
       }
-      const session: Session = isHosting(code)
+      const host = hosting
         ? new HostSession({
             code,
             me,
             transport,
-            packs,
+            packs: [...packs, ...custom],
             store: { load: () => loadRoomSnapshot(code), save: (data) => saveRoomSnapshot(code, data) },
           })
-        : new ClientSession({ code, me, transport });
-      ctx = { session, me, packs, redraw: draw };
+        : null;
+      const session: Session = host ?? new ClientSession({ code, me, transport, packs: browserPackLoader });
+      ctx = { session, host, me, packs, upload: { busy: false, problems: [] }, redraw: draw };
       session.subscribe(draw);
       draw();
     } catch (err) {

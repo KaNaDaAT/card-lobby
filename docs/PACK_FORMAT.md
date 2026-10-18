@@ -24,7 +24,9 @@ my-pack/
 ```
 
 Built-in packs live in `public/packs/<id>/` and are listed in `public/packs/index.json`.
-A custom pack is the same folder zipped, with `pack.json` at the root of the zip.
+A custom pack is the same folder zipped, with `pack.json` at the root of the zip or inside one
+top folder (what zipping the folder itself gives you). Only `.json` files and png, jpg, webp or
+svg images may be in it. Limits: 25 MB for the zip, 2 MB per image, 1 MB per JSON file.
 
 ## pack.json
 

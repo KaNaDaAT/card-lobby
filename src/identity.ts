@@ -34,6 +34,9 @@ function slot(): string {
 
 const key = (name: string) => `card-lobby:${name}${slot()}`;
 
+/** A storage name of this browser slot, for stores outside localStorage (IndexedDB). */
+export const slotName = (name: string) => key(name);
+
 function read(name: string): string | null {
   try {
     return localStorage.getItem(key(name));

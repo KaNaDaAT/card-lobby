@@ -18,5 +18,5 @@ export async function loadBuiltInPack(id: string): Promise<LoadedPack> {
   const base = `${PACKS_URL}${id}/`;
   const pack = await fetchJson<Pack>(`${base}pack.json`);
   const addons = await Promise.all((pack.addons ?? []).map((p) => fetchJson<Addon>(base + p)));
-  return { pack, addons, asset: (path) => base + path };
+  return { key: pack.id, pack, addons, asset: (path) => base + path };
 }

@@ -29,11 +29,21 @@ export function joinTrysteroRoom(code: string): Transport {
       if (existing) return existing as Channel<T>;
       const action: MessageAction = room.makeAction(name);
       const listeners: ((data: T, from: string) => void)[] = [];
-      action.onMessage = (data, { peerId }) => listeners.forEach((cb) => cb(data as T, peerId));
+      const progress: ((fraction: number, from: string) => void)[] = [];
+      const guards: ((bytes: number, from: string) => boolean)[] = [];
+      action.onMessage = (data, { peerId }) => {
+        const payload = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
+        listeners.forEach((cb) => cb(payload as T, peerId));
+      };
+      // Runs before a payload is received, so oversized ones are declined without the download.
+      action.onReceive = ({ byteLength, peerId }) => guards.every((g) => g(byteLength, peerId));
+      action.onReceiveProgress = (fraction, { peerId }) => progress.forEach((cb) => cb(fraction, peerId));
       const channel: Channel<T> = {
         // Our payloads are plain JSON objects. Trystero's JsonValue type wants index signatures.
         send: (data, to) => action.send(data as DataPayload, { target: to ?? null }),
         onMessage: (cb) => void listeners.push(cb),
+        onProgress: (cb) => void progress.push(cb),
+        guard: (check) => void guards.push(check),
       };
       channels.set(name, channel as Channel<unknown>);
       return channel;
