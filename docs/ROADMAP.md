@@ -90,11 +90,14 @@ Goal: play a full game with friends in tabs.
 - [x] Size and type limits, enforced in Trystero `onReceive` and after unzip.
 - [x] Spectator role for players who declined.
 
-## M6: Polish and deploy
+## M6: Polish and deploy (done, deploy needs Pages turned on)
 
-- [ ] Phone layout: chat and log become drawers.
-- [ ] TURN config (Trystero `turnConfig`).
-- [ ] Deploy `dist/` to GitHub Pages or Cloudflare Pages.
+- [x] Phone layout: chat and log become drawers.
+- [x] TURN config (Trystero `turnConfig`), from `VITE_TURN_*` build settings.
+- [x] Deploy `dist/` to GitHub Pages or Cloudflare Pages. `.github/workflows/deploy.yml`
+  publishes on every push to `main` once Settings > Pages > Source is set to GitHub Actions.
+- [x] Browser tests (`npm run e2e`, Playwright) for the lobby, a whole game, custom packs and
+  the phone drawers, run in CI on pull requests.
 - [x] Protocol version check with an "update your page" view.
 
 ## M7: Exploding Kittens (future work)

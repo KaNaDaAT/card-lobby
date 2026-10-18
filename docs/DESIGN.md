@@ -56,8 +56,10 @@
   - The data channels themselves are always DTLS encrypted, end to end.
 - Tradeoff: the code is also the key. 40 bits is fine against guessing by strangers. It is not
   meant to stop a determined attacker who runs a relay. Acceptable for friends.
-- TURN: some networks block direct connections. Add a TURN server via Trystero's `turnConfig`
-  (milestone 6). One free account is enough for a friend group.
+- TURN: some networks block direct connections. Set `VITE_TURN_URLS` (and username and
+  credential) at build time and they go into Trystero's `turnConfig`. `VITE_NOSTR_RELAYS`
+  replaces the default relays. See `.env.example`. One free TURN account is enough for a friend
+  group. These values end up in the public JavaScript.
 
 ## Identity, host lock and reconnects
 

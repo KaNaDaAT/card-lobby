@@ -13,11 +13,14 @@ Read [docs/DESIGN.md](docs/DESIGN.md) before changing architecture, and
 - `npm run check` type-checks
 - `npm test` runs Vitest once, including 750 simulated games (`SIM_GAMES=5000 npm test` for more)
 - `npm run build` type-checks and builds static files into `dist/`
+- `npm run e2e` runs the Playwright browser tests in `e2e/` against the production build
+  (`npx playwright install chromium` once per machine)
 
 ## Stack rules
 
 - TypeScript, HTML and CSS only. No UI framework.
-- Runtime dependencies: Trystero only. Ask before adding another.
+- Runtime dependencies: Trystero only. Ask before adding another. Dev tools: Vite, Vitest,
+  TypeScript and Playwright (pinned, it must match its browser build).
 - No server code. Everything must work as static files.
 
 ## Architecture in one paragraph
@@ -59,6 +62,8 @@ network, no clock, seeded RNG, plain-JSON state. Only the host runs it.
 - `src/ui` DOM helper, router, components, screens
 - `src/identity.ts` local player id, name, color, host marker
 - `src/styles` design tokens (light and dark) and app styles
+- `e2e` browser tests (`*.e2e.ts`), several local-mode tabs acting as players
+- `.github/workflows` CI on pull requests, GitHub Pages deploy on `main`
 - `public/packs` built-in packs, one folder each, listed in `public/packs/index.json`
 
 ## Testing locally

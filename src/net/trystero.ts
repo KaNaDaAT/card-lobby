@@ -3,16 +3,40 @@
  * password, so relays only ever see encrypted signaling. See docs/DESIGN.md, "Rooms, codes and
  * encryption".
  */
-import { joinRoom, selfId, type DataPayload, type MessageAction } from 'trystero';
+import { joinRoom, selfId, type DataPayload, type MessageAction, type NostrRoomConfig } from 'trystero';
 import type { Channel, Transport } from './transport';
 
 export const APP_ID = 'card-lobby';
 
-/** Room-wide receive budget. Custom packs are at most 25 MB (milestone 5). */
+/** Room-wide receive budget. Custom packs are at most 25 MB. */
 const MAX_RECEIVE_BYTES = 30 * 1024 * 1024;
 
+const list = (value: string | undefined) =>
+  (value ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+/** Room settings, with TURN servers and relays from the build settings (see `.env.example`). */
+export function roomConfig(code: string, env: ImportMetaEnv = import.meta.env): NostrRoomConfig {
+  const config: NostrRoomConfig = { appId: APP_ID, password: code, maxReceiveBytes: MAX_RECEIVE_BYTES };
+  const turn = list(env.VITE_TURN_URLS);
+  if (turn.length) {
+    config.turnConfig = [
+      {
+        urls: turn,
+        ...(env.VITE_TURN_USERNAME ? { username: env.VITE_TURN_USERNAME } : {}),
+        ...(env.VITE_TURN_CREDENTIAL ? { credential: env.VITE_TURN_CREDENTIAL } : {}),
+      },
+    ];
+  }
+  const relays = list(env.VITE_NOSTR_RELAYS);
+  if (relays.length) config.relayConfig = { urls: relays };
+  return config;
+}
+
 export function joinTrysteroRoom(code: string): Transport {
-  const room = joinRoom({ appId: APP_ID, password: code, maxReceiveBytes: MAX_RECEIVE_BYTES }, code);
+  const room = joinRoom(roomConfig(code), code);
   const joins: ((peerId: string) => void)[] = [];
   const leaves: ((peerId: string) => void)[] = [];
   const channels = new Map<string, Channel<unknown>>();

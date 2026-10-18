@@ -1654,6 +1654,26 @@ dialog::backdrop {
   font-size: 12px;
 }
 
+/* ---------- Drawers (phones) ---------- */
+
+.dock,
+.drawer-head,
+.drawer-backdrop {
+  display: none;
+}
+
+.dock-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+}
+
 /* ---------- Narrow screens ---------- */
 
 @media (max-width: 960px) {
@@ -1662,9 +1682,101 @@ dialog::backdrop {
     padding: 16px;
   }
 
+  .room {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+
+  .dock {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 20;
+    display: flex;
+    gap: 8px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface) 90%, transparent);
+    backdrop-filter: blur(10px);
+  }
+
+  .dock-btn {
+    flex: 1;
+  }
+
+  .drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    display: block;
+    background: rgb(12 7 24 / 0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+
+  .room[data-drawer] .drawer-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* The side column slides up as a sheet with one of its panels. */
   .col-side {
-    position: static;
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    top: auto;
+    z-index: 30;
+    height: min(80vh, 640px);
     max-height: none;
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+    border-radius: 20px 20px 0 0;
+    background: var(--bg);
+    box-shadow: var(--shadow);
+    transform: translateY(105%);
+    visibility: hidden;
+    transition:
+      transform 0.25s ease,
+      visibility 0.25s;
+  }
+
+  .room[data-drawer] .col-side {
+    transform: none;
+    visibility: visible;
+  }
+
+  .drawer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px;
+  }
+
+  .room[data-drawer='side'] .col-side .chat,
+  .room[data-drawer='chat'] .col-side .col-side-top {
+    display: none;
+  }
+
+  .col-side .chat,
+  .col-side .log-panel,
+  .col-side .players {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .col-side .players {
+    overflow-y: auto;
+  }
+
+  /* The drawer's own header names the panel. */
+  .col-side .panel-head h2 {
+    display: none;
+  }
+
+  .col-side .panel-head:not(:has(.pill)) {
+    display: none;
   }
 
   .topbar {
@@ -1681,9 +1793,7 @@ dialog::backdrop {
     aspect-ratio: 16 / 8;
   }
 
-  .log-panel {
-    max-height: 320px;
-  }
+
 }
 
 @media (max-width: 560px) {

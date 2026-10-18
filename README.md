@@ -6,7 +6,7 @@ link or code, everyone chats and plays. Peer to peer and encrypted, no accounts,
 Games are data packs: a `pack.json` with cards and rules, plus images. Addons work like DLC and
 can add, remove or change cards and rules. The first game is Power Hungry Pets.
 
-**Status:** playable (milestones 1 to 5). Create a lobby, invite friends, chat, and play full
+**Status:** playable and deployable (milestones 1 to 6). Create a lobby, invite friends, chat, and play full
 games of Power Hungry Pets, with rematches, reconnects and host reloads mid-game. Hosts can
 upload their own packs as a .zip, and players accept them before they download. See
 [docs/ROADMAP.md](docs/ROADMAP.md).
@@ -32,7 +32,21 @@ needs no network:
    tab is a second player. `&as=3` for a third, and so on.
 
 Other scripts: `npm test` (unit tests plus 750 simulated games; `SIM_GAMES=5000 npm test` for
-more), `npm run check` (type-check), `npm run build` (static files in `dist/`).
+more), `npm run e2e` (browser tests against the production build; run
+`npx playwright install chromium` once first), `npm run check` (type-check), `npm run build`
+(static files in `dist/`).
+
+## Deploy
+
+`dist/` is plain static files, so any static host works. The repository includes a GitHub
+Actions workflow that tests, builds and publishes to GitHub Pages on every push to `main`.
+Turn it on once under Settings > Pages > Source: GitHub Actions.
+
+Players behind strict networks (some offices and mobile carriers) may need a TURN server. Set
+`VITE_TURN_URLS`, `VITE_TURN_USERNAME` and `VITE_TURN_CREDENTIAL` when building (locally in
+`.env.local`, see `.env.example`; for the Pages workflow as repository variables `TURN_URLS`,
+`TURN_USERNAME` and the secret `TURN_CREDENTIAL`). They end up in the public JavaScript, so use
+an account meant for your group.
 
 ## Make your own pack
 

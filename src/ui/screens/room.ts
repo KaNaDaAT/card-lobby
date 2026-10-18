@@ -39,6 +39,11 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
   let disposed = false;
   let drawnChat: ChatMessage[] | null = null;
   let memo: TableMemo = newTableMemo();
+  // Phone layout: the side column becomes a drawer, opened from a dock at the bottom.
+  const narrow = matchMedia('(max-width: 960px)');
+  let drawer: 'side' | 'chat' | null = null;
+  let sideLabel = 'Players';
+  let unread = 0;
 
   const banner = h('div', { class: 'banner-slot' });
   const mainRegion = h('section', { class: 'col-main' });
@@ -60,6 +65,29 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
     ctx.session.say(text);
     chatInput.value = '';
   };
+
+  const sideButton = h('button', { type: 'button', class: 'btn dock-btn', onclick: () => openDrawer('side') });
+  const chatButton = h('button', { type: 'button', class: 'btn dock-btn', onclick: () => openDrawer('chat') });
+  const drawerTitle = h('h2', null);
+  const updateDock = () => {
+    sideButton.textContent = sideLabel;
+    replace(chatButton, 'Chat', unread ? h('span', { class: 'dock-badge', 'aria-label': `${unread} new` }, unread) : null);
+    drawerTitle.textContent = drawer === 'chat' ? 'Chat' : sideLabel;
+  };
+  const openDrawer = (which: 'side' | 'chat' | null) => {
+    drawer = which;
+    if (which) room.dataset.drawer = which;
+    else delete room.dataset.drawer;
+    if (which === 'chat') {
+      unread = 0;
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+    updateDock();
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && drawer) openDrawer(null);
+  };
+  document.addEventListener('keydown', onKey);
 
   const copyButton = h('button', { type: 'button', class: 'btn btn-ghost btn-sm' }, 'Copy link');
   copyButton.addEventListener('click', async () => {
@@ -94,9 +122,16 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
       'main',
       { class: 'room-grid' },
       mainRegion,
+      h('div', { class: 'drawer-backdrop', onclick: () => openDrawer(null) }),
       h(
         'aside',
         { class: 'col-side' },
+        h(
+          'div',
+          { class: 'drawer-head' },
+          drawerTitle,
+          h('button', { type: 'button', class: 'btn btn-ghost btn-sm', onclick: () => openDrawer(null) }, 'Close'),
+        ),
         sideRegion,
         h(
           'section',
@@ -107,8 +142,10 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
         ),
       ),
     ),
+    h('nav', { class: 'dock', 'aria-label': 'Panels' }, sideButton, chatButton),
   );
   root.append(room);
+  updateDock();
   replace(mainRegion, waitingPanel('Connecting', local ? 'Opening a local room for tabs in this browser.' : 'Joining the room.'));
 
   const draw = () => {
@@ -159,14 +196,23 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
       replace(sideRegion, log);
       const lines = log.querySelector('.log');
       if (lines) lines.scrollTop = lines.scrollHeight;
+      sideLabel = 'Log';
     } else {
       memo = newTableMemo();
       replace(mainRegion, lobbyMain(c, view.lobby));
       replace(sideRegion, playersPanel(c, view.lobby));
+      sideLabel = 'Players';
     }
+    updateDock();
   };
 
   const drawChat = (c: RoomCtx, state: SessionState, view: View | null) => {
+    // Count what others said while the chat drawer was closed.
+    if (narrow.matches && drawer !== 'chat' && drawnChat) {
+      const seen = new Set(drawnChat.map((m) => m.id));
+      unread += state.chat.filter((m) => !seen.has(m.id) && m.from !== 'system' && m.from !== c.me.playerId).length;
+      updateDock();
+    }
     drawnChat = state.chat;
     const colors = new Map(view?.lobby.players.map((p) => [p.playerId, p.color]));
     const stick = chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight < 40;
@@ -219,6 +265,7 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
 
   return () => {
     disposed = true;
+    document.removeEventListener('keydown', onKey);
     ctx?.session.leave();
   };
 };
