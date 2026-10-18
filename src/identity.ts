@@ -85,3 +85,12 @@ export function markHosting(code: string): void {
 export function isHosting(code: string): boolean {
   return read(`host:${code}`) === '1';
 }
+
+/** The host's saved room (members, lobby, chat, game), so a reload resumes it. */
+export function loadRoomSnapshot(code: string): string | null {
+  return read(`room:${code}`);
+}
+
+export function saveRoomSnapshot(code: string, data: string): void {
+  write(`room:${code}`, data);
+}

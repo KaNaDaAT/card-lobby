@@ -218,6 +218,18 @@ select.input {
   color: var(--text-2);
 }
 
+.pill-warn {
+  background: color-mix(in srgb, #f8961e 22%, var(--surface));
+  color: var(--text);
+}
+
+.btn-xs {
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
 .avatar {
   display: inline-grid;
   place-items: center;
@@ -475,6 +487,13 @@ select.input {
   background: color-mix(in srgb, var(--accent) 8%, var(--surface));
   color: var(--text-2);
   font-size: 14px;
+}
+
+.notice-warn {
+  border-style: solid;
+  border-color: color-mix(in srgb, #f8961e 60%, var(--border));
+  background: color-mix(in srgb, #f8961e 12%, var(--surface));
+  color: var(--text);
 }
 
 .room-grid {
@@ -897,6 +916,14 @@ select.input {
 
 .conn.on {
   background: var(--ok);
+}
+
+.player.is-away .player-name {
+  color: var(--text-3);
+}
+
+.col-side-top {
+  display: contents;
 }
 
 /* Chat */

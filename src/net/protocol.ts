@@ -70,12 +70,21 @@ export interface ChatMessage {
   at: number;
 }
 
+/** Payload of the `chat` action. `history` replaces what the client has (sent on join). */
+export interface ChatPayload {
+  messages: ChatMessage[];
+  history?: boolean;
+}
+
 export type Intent =
   | { kind: 'selectPack'; packId: string }
   | { kind: 'toggleAddon'; addonId: string; on: boolean }
   | { kind: 'setOption'; id: string; value: OptionValue }
   | { kind: 'start' }
   | { kind: 'answer'; promptId: string; value: unknown }
+  | { kind: 'nextRound' }
+  | { kind: 'rematch' }
+  | { kind: 'endGame' }
   | { kind: 'kickForRound'; playerId: string }
   | { kind: 'removePlayer'; playerId: string }
   | { kind: 'assignSeat'; seatOf: string; to: string };
