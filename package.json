@@ -1,0 +1,23 @@
+{
+  "name": "card-lobby",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Peer-to-peer card game lobby. Games and addons are data packs.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "trystero": "^0.26.0"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
+  }
+}

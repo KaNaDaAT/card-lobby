@@ -1,0 +1,57 @@
+/* Design tokens. Light by default, dark via the OS setting or data-theme="dark". */
+:root {
+  color-scheme: light dark;
+
+  --bg: #f4f1fa;
+  --bg-glow: rgb(157 133 255 / 0.18);
+  --surface: #ffffff;
+  --surface-2: #f2eef9;
+  --surface-3: #e8e2f3;
+  --border: #e2dbef;
+  --text: #1d1530;
+  --text-2: #554c69;
+  --text-3: #857c98;
+  --danger: #c93a52;
+  --ok: #23885a;
+  --shadow: 0 1px 2px rgb(29 21 48 / 0.06), 0 10px 30px rgb(29 21 48 / 0.08);
+
+  --accent: #9d85ff;
+  --accent-ink: #1d1530;
+
+  --radius: 18px;
+  --radius-sm: 10px;
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #110c1d;
+    --bg-glow: rgb(157 133 255 / 0.14);
+    --surface: #1b1530;
+    --surface-2: #231c3b;
+    --surface-3: #2e2649;
+    --border: #322a4f;
+    --text: #f3effc;
+    --text-2: #c2b9d8;
+    --text-3: #8e85a8;
+    --danger: #ff6b81;
+    --ok: #4fd18b;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px rgb(0 0 0 / 0.35);
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #110c1d;
+  --bg-glow: rgb(157 133 255 / 0.14);
+  --surface: #1b1530;
+  --surface-2: #231c3b;
+  --surface-3: #2e2649;
+  --border: #322a4f;
+  --text: #f3effc;
+  --text-2: #c2b9d8;
+  --text-3: #8e85a8;
+  --danger: #ff6b81;
+  --ok: #4fd18b;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px rgb(0 0 0 / 0.35);
+}
