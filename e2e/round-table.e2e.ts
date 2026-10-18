@@ -28,6 +28,20 @@ test('the round table seats everyone, points at whose move it is, and is remembe
   await page.reload();
   await expect(page.locator('.rt-felt')).toBeVisible();
 
+  // A card in your hand opens large first. Back keeps it in your hand.
+  const active = [page, tom, mia];
+  for (const p of active) {
+    if (!(await p.locator('.prompt-bar').count())) continue;
+    const cards = await p.locator('.hand .card-button').count();
+    await p.locator('.hand .card-button.is-active').first().click();
+    await expect(p.locator('dialog.card-dialog .card-play')).toBeVisible();
+    await p.click('dialog.card-dialog button:has-text("Back")');
+    await expect(p.locator('dialog.card-dialog')).toHaveCount(0);
+    await expect(p.locator('.hand .card-button')).toHaveCount(cards);
+    await expect(p.locator('.prompt-bar')).toBeVisible();
+    break;
+  }
+
   const moves = await playToTheEnd(page, [page, tom, mia]);
   expect(moves).toBeGreaterThan(5);
   await expect(page.locator('.result-game h2')).toContainText('the game!');

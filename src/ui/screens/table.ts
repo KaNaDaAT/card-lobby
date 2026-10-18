@@ -12,7 +12,7 @@ import type { LobbyView } from '../../net/protocol';
 import { valueText, type CardDef, type LoadedPack, type Pack } from '../../packs/types';
 import { mergeSelection } from '../../session/lobby';
 import { avatar, pill } from '../components/bits';
-import { cardBack, cardFace, type CardOpts } from '../components/card';
+import { cardBack, cardFace, showCard, type CardOpts } from '../components/card';
 import { confirmDialog } from '../components/dialog';
 import { h, type Child } from '../dom';
 import { resolvePack, type RoomCtx } from './lobby';
@@ -104,16 +104,7 @@ export function tableMain(ctx: RoomCtx, lobby: LobbyView, game: GameView, memo: 
   const watching = h('p', { class: 'muted small spectating' }, 'You are watching this game.');
   const content =
     tableLayout() === 'round'
-      ? h(
-          'section',
-          { class: 'panel table table-round' },
-          roundTop(t),
-          windowBanner(t),
-          result(t),
-          roundFelt(t),
-          promptBar(t),
-          game.you !== null ? roundHand(t, game.players[game.you]!) : watching,
-        )
+      ? h('section', { class: 'panel table table-round' }, roundTop(t), result(t), roundFelt(t), roundDock(t, watching))
       : h(
           'section',
           { class: 'panel table' },
@@ -291,18 +282,17 @@ function center(t: T, cls = 'center', compact = false): HTMLElement {
 }
 
 /** Your hand: cards to click when you are asked to play, cards to read otherwise. */
-function yourHand(t: T): HTMLElement[] {
+function yourHand(t: T, size: CardOpts['size'] = t.game.hand.length > 5 ? 'md' : 'lg'): HTMLElement[] {
   const p = t.prompt;
   const playing = p?.kind === 'play';
   const multi = playing && p.max > 1;
-  const size = t.game.hand.length > 5 ? 'md' : 'lg';
   return t.game.hand.map((card) => {
     if (!playing) return face(t, card, { size });
     const picked = t.memo.picked.includes(card.uid);
     return face(t, card, {
       size,
       active: multi ? picked : true,
-      onClick: () => (multi ? togglePick(t, card.uid) : void playCard(t, card)),
+      onClick: () => (multi ? togglePick(t, card.uid) : openHandCard(t, card)),
     });
   });
 }
@@ -348,8 +338,16 @@ function knocksYouOut(card: CardDef): boolean {
   return (card.onDiscard ?? []).some((op) => op.op === 'eliminate' && op.who === 'self');
 }
 
-async function playCard(t: T, card: VisibleCard): Promise<void> {
-  await playCards(t, [card.uid]);
+/** A card in your hand opens large, so you can read it, with Play and Back. */
+function openHandCard(t: T, card: VisibleCard): void {
+  const d = def(t, card.cardId);
+  const p = t.prompt;
+  if (p?.kind !== 'play' || !p.alone.includes(card.uid)) return showCard(t.lp, d);
+  const out = knocksYouOut(d);
+  showCard(t.lp, d, {
+    note: out ? 'Playing it puts it face up in front of you: you will be out of this round.' : undefined,
+    actions: [{ label: out ? `Play ${d.name} and go out` : `Play ${d.name}`, kind: out ? 'danger' : 'primary', onClick: () => answer(t, [card.uid]) }],
+  });
 }
 
 /** Plays cards, after a warning when a single card would knock you out. */
@@ -414,7 +412,7 @@ function promptBar(t: T): HTMLElement | null {
         p.min === 0 ? h('button', { type: 'button', class: 'btn', onclick: () => answer(t, []) }, p.pass ?? 'Pass') : null;
       if (p.max === 1) {
         title = 'Your turn. Play one of your cards.';
-        body = [h('p', { class: 'muted small' }, 'Click a card in your hand. Click any other card to read it.'), pass];
+        body = [h('p', { class: 'muted small' }, 'Click a card in your hand to read it and play it.'), pass];
         break;
       }
       const picked = t.memo.picked;
@@ -436,6 +434,8 @@ function promptBar(t: T): HTMLElement | null {
           h('button', { type: 'button', class: 'btn btn-primary', disabled: !valid, onclick: () => void playCards(t, picked) }, label),
           pass,
         ),
+        // One picked card: its text, so you can read before you play.
+        picked.length === 1 ? h('p', { class: 'picked-text' }, h('strong', null, def(t, ids[0]!).name), ` ${def(t, ids[0]!).text}`) : null,
         p.combos.length
           ? h('p', { class: 'muted small' }, `Combos: ${p.combos.map((c) => `${c.name} (${c.size} ${c.match === 'same' ? 'alike' : 'different'})`).join(', ')}.`)
           : null,
@@ -602,35 +602,15 @@ function roundFelt(t: T): HTMLElement {
   t.memo.focus = focus;
 
   const many = seats.length > 6;
-  let arrow: HTMLElement | null = null;
-  let spot = '';
-  if (target) {
-    const rim = onOval(target.angle, 1);
-    // The felt keeps a 16:10 shape, so the direction to the seat on screen follows from that.
-    const rad = (target.angle * Math.PI) / 180;
-    const dx = 16 * Math.cos(rad);
-    const dy = 10 * Math.sin(rad);
-    const len = Math.hypot(dx, dy);
-    const [ux, uy] = [dx / len, dy / len];
-    // Just inside the seat's edge: seats are about 150 x 150 px (120 wide when crowded), centered on the rim.
-    const gap = 12 + Math.abs(ux) * (many ? 60 : 76) + Math.abs(uy) * 74 + 14;
-    const turn = (Math.atan2(uy, ux) * 180) / Math.PI;
-    arrow = h('div', {
-      class: `rt-arrow${flash ? ' is-new' : ''}`,
-      style: `left: calc(${rim.x.toFixed(2)}% - ${(ux * gap).toFixed(1)}px); top: calc(${rim.y.toFixed(2)}% - ${(uy * gap).toFixed(1)}px); --turn: ${turn.toFixed(1)}deg`,
-      'aria-hidden': 'true',
-    });
-    spot = `--spot-x: ${rim.x.toFixed(2)}%; --spot-y: ${rim.y.toFixed(2)}%`;
-  }
+  const rim = target ? onOval(target.angle, 1) : null;
   return h(
     'div',
     { class: `rt-stage${many ? ' rt-many' : ''}` },
     h(
       'div',
-      { class: 'rt-felt', style: spot || null },
-      arrow,
+      { class: 'rt-felt', style: rim ? `--spot-x: ${rim.x.toFixed(2)}%; --spot-y: ${rim.y.toFixed(2)}%` : null },
       h('div', { class: 'rt-center' }, turnLabel(t), center(t, 'rt-zones', true), flagsRow(t), ticker(t, 'rt-ticker')),
-      seats.map(({ p, angle }) => roundSeat(t, p, angle, p.seat === focus)),
+      seats.map(({ p, angle }) => roundSeat(t, p, angle, p.seat === focus, flash)),
     ),
   );
 }
@@ -649,25 +629,25 @@ function turnLabel(t: T): HTMLElement | null {
     const text = !t.prompt ? 'Sending...' : w.kind === 'play' ? 'Your turn' : 'Your move';
     return h('p', { class: 'rt-turn is-you' }, text);
   }
-  if (!player.connected) return h('div', { class: 'rt-turn-away' }, h('p', { class: 'rt-turn' }, `${player.name} is away`), kickButton(t, player));
+  if (!player.connected) return h('p', { class: 'rt-turn' }, `${player.name} is away`);
   const text = w.kind === 'play' && w.seat === g.turnSeat ? `${player.name}'s turn` : `${player.name} is about ${WAITING_FOR[w.kind]}`;
   return h('p', { class: 'rt-turn' }, text);
 }
 
-function roundSeat(t: T, p: PlayerView, angle: number, focused: boolean): HTMLElement {
+function roundSeat(t: T, p: PlayerView, angle: number, focused: boolean, flash: boolean): HTMLElement {
   const g = t.game;
   const isMe = p.seat === g.you;
   const isTurn = g.phase === 'round' && g.turnSeat === p.seat;
   const choosable = t.prompt?.kind === 'choosePlayer' && t.prompt.choices.includes(p.seat);
   const winner = g.result?.winners.includes(p.seat) && g.phase !== 'round';
   const out = p.round !== 'in' && g.phase === 'round';
-  const cls = ['rt-seat', isMe ? 'is-me' : '', focused ? 'is-focus' : '', out ? 'is-out' : '', choosable ? 'is-choice' : '', winner ? 'is-winner' : '']
+  const cls = ['rt-seat', isMe ? 'is-me' : '', focused ? 'is-focus' : '', focused && flash ? 'is-new' : '', out ? 'is-out' : '', choosable ? 'is-choice' : '', winner ? 'is-winner' : '']
     .filter(Boolean)
     .join(' ');
   const at = onOval(angle, 1);
   const body = [
-    h('div', { class: 'rt-seat-head' }, avatar(p.name, p.color), h('span', { class: 'rt-seat-name' }, isMe ? `${p.name} (you)` : p.name)),
-    h('div', { class: 'rt-seat-meta' }, tokens(t, p), badges(t, p), isTurn ? pill('Turn', 'pill-turn') : focused ? pill('Deciding', 'pill-turn') : null),
+    h('div', { class: 'rt-seat-head' }, avatar(p.name, p.color), h('span', { class: 'rt-seat-name' }, isMe ? `${p.name} (you)` : p.name), tokens(t, p)),
+    h('div', { class: 'rt-seat-meta' }, badges(t, p), isTurn ? pill('Turn', 'pill-turn') : focused ? pill('Deciding', 'pill-turn') : null),
     h(
       'div',
       { class: 'rt-seat-cards' },
@@ -676,23 +656,52 @@ function roundSeat(t: T, p: PlayerView, angle: number, focused: boolean): HTMLEl
       p.played.length ? h('div', { class: 'rt-played', 'aria-label': `Played by ${p.name}` }, p.played.map((c) => face(t, c, { size: 'sm' }))) : null,
     ),
   ];
-  const style = `left: ${at.x.toFixed(2)}%; top: ${at.y.toFixed(2)}%`;
+  // The arrow on the focused seat points at it from the middle; CSS works out its angle.
+  const rad = (angle * Math.PI) / 180;
+  const style = `left: ${at.x.toFixed(2)}%; top: ${at.y.toFixed(2)}%; --c: ${Math.cos(rad).toFixed(4)}; --s: ${Math.sin(rad).toFixed(4)}`;
   if (choosable) {
     return h('button', { type: 'button', class: cls, style, 'aria-label': `Choose ${isMe ? 'yourself' : p.name}`, onclick: () => answer(t, p.seat) }, body);
   }
   return h('div', { class: cls, style }, body);
 }
 
-/** Your hand under the table. It lights up when the game waits on you. */
-function roundHand(t: T, me: PlayerView): HTMLElement {
+/**
+ * The bar pinned to the bottom of the screen: what the game asks you (or who it waits on, or the
+ * play others can react to) beside your hand. It keeps its place, so the hand never moves away.
+ */
+function roundDock(t: T, watching: HTMLElement): HTMLElement {
   const g = t.game;
-  const yourMove = g.phase === 'round' && g.waiting?.seat === me.seat && Boolean(t.prompt);
-  const hand = yourHand(t);
+  const me = g.you !== null ? g.players[g.you]! : null;
+  const yourMove = g.phase === 'round' && me !== null && g.waiting?.seat === me.seat && Boolean(t.prompt);
+  const hand = me ? yourHand(t, 'md') : [];
   return h(
     'div',
-    { class: `rt-hand${yourMove ? ' is-turn' : ''}` },
-    h('span', { class: 'zone-label' }, 'Your hand'),
-    h('div', { class: 'hand', 'aria-label': 'Your hand' }, hand.length ? hand : h('p', { class: 'muted small' }, 'No cards in hand.')),
+    { class: `rt-dock${yourMove ? ' is-turn' : ''}` },
+    h('div', { class: 'rt-ask' }, promptBar(t) ?? windowBanner(t) ?? waitingNote(t)),
+    me
+      ? h(
+          'div',
+          { class: 'rt-hand' },
+          h('span', { class: 'zone-label' }, 'Your hand'),
+          h('div', { class: `hand${hand.length > 5 ? ' is-fan' : ''}`, 'aria-label': 'Your hand' }, hand.length ? hand : h('p', { class: 'muted small' }, 'No cards in hand.')),
+        )
+      : watching,
+  );
+}
+
+/** When nothing is asked of you: who the game waits on, in words. */
+function waitingNote(t: T): HTMLElement {
+  const g = t.game;
+  if (g.phase !== 'round') return h('p', { class: 'rt-wait' }, g.phase === 'gameOver' ? 'The game is over.' : 'The round is over.');
+  const w = g.waiting;
+  if (!w) return h('p', { class: 'rt-wait' }, `${name(t, g.turnSeat)}'s turn.`);
+  const player = g.players[w.seat]!;
+  if (w.seat === g.you) return h('p', { class: 'rt-wait' }, 'Sending...');
+  return h(
+    'div',
+    { class: 'rt-wait' },
+    h('p', null, player.connected ? `Waiting for ${player.name} ${WAITING_FOR[w.kind]}.` : `${player.name} is away. Waiting for them ${WAITING_FOR[w.kind]}.`),
+    kickButton(t, player),
   );
 }
 

@@ -56,8 +56,17 @@ export function cardBack(lp: LoadedPack, opts: CardOpts = {}): HTMLElement {
   );
 }
 
-/** Shows one card large, with its rules text. */
-export function showCard(lp: LoadedPack, card: CardDef): void {
+export interface CardAction {
+  label: string;
+  /** `danger` for a play that costs you, like the King Cat. */
+  kind?: 'primary' | 'danger';
+  onClick: () => void;
+}
+
+/** Shows one card large, with its rules text. With an action (Play), the other button is Back. */
+export function showCard(lp: LoadedPack, card: CardDef, opts: { actions?: CardAction[]; note?: string } = {}): void {
+  const actions = opts.actions ?? [];
+  const danger = actions.some((a) => a.kind === 'danger');
   const dialog = h(
     'dialog',
     { class: 'card-dialog', 'aria-label': card.name },
@@ -75,8 +84,28 @@ export function showCard(lp: LoadedPack, card: CardDef): void {
         h('h2', null, card.name),
         card.value !== undefined ? h('p', { class: 'muted' }, `Value ${valueText(card)}`) : null,
         h('p', null, card.text),
-        // A plain button: the page's CSP (form-action 'none') may block <form method="dialog">.
-        h('button', { type: 'button', class: 'btn', autofocus: true, onclick: () => dialog.close() }, 'Close'),
+        opts.note ? h('p', { class: 'card-dialog-note' }, opts.note) : null,
+        h(
+          'div',
+          { class: 'card-dialog-actions' },
+          actions.map((a) =>
+            h(
+              'button',
+              {
+                type: 'button',
+                class: `btn card-play ${a.kind === 'danger' ? 'btn-danger' : 'btn-primary'}`,
+                autofocus: !danger,
+                onclick: () => {
+                  dialog.close();
+                  a.onClick();
+                },
+              },
+              a.label,
+            ),
+          ),
+          // A plain button: the page's CSP (form-action 'none') may block <form method="dialog">.
+          h('button', { type: 'button', class: 'btn', autofocus: danger || !actions.length, onclick: () => dialog.close() }, actions.length ? 'Back' : 'Close'),
+        ),
       ),
     ),
   );

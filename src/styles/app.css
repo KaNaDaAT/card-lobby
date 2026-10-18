@@ -1506,12 +1506,21 @@ select.input {
 }
 
 .rt-stage {
-  padding: 84px 88px 92px;
+  padding: 66px 84px 74px;
+  container-type: inline-size;
 }
 
+/*
+ * As tall as the screen allows with the pinned hand below. Short screens get a wider oval
+ * instead of a smaller one, so the seats keep room around the middle.
+ */
 .rt-felt {
+  --rt-h: clamp(230px, calc(100dvh - 480px), 560px);
   position: relative;
-  aspect-ratio: 16 / 10;
+  width: min(100cqw, calc(var(--rt-h) * 2.3));
+  height: min(var(--rt-h), calc(100cqw / 1.5));
+  margin: 0 auto;
+  container-type: size;
   border: 12px solid #7a4b2a;
   border-radius: 50%;
   background:
@@ -1545,13 +1554,6 @@ select.input {
 
 .rt-turn.is-you {
   color: #ffe08a;
-}
-
-.rt-turn-away {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
 }
 
 .rt-zones {
@@ -1594,25 +1596,32 @@ select.input {
   color: var(--text);
 }
 
-.rt-arrow {
+/*
+ * The arrow at the seat the game waits on, just off its edge toward the middle. --c and --s
+ * are the seat's angle on the oval; the angle on screen depends on the oval's shape.
+ */
+.rt-seat.is-focus::after {
+  --phi: atan2(calc(var(--s) * 100cqh), calc(var(--c) * 100cqw));
+  content: '';
   position: absolute;
-  width: 40px;
-  height: 28px;
+  top: calc(50% - sin(var(--phi)) * (50% + 20px));
+  left: calc(50% - cos(var(--phi)) * (50% + 20px));
+  width: 36px;
+  height: 26px;
   background: #ffe08a;
   clip-path: polygon(0 22%, 58% 22%, 58% 0, 100% 50%, 58% 100%, 58% 78%, 0 78%);
   filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.4));
-  transform: translate(-50%, -50%) rotate(var(--turn));
+  transform: translate(-50%, -50%) rotate(var(--phi));
   pointer-events: none;
 }
 
-.rt-arrow.is-new {
+.rt-seat.is-focus.is-new::after {
   animation: rt-arrow-in 0.45s ease-out;
 }
 
 @keyframes rt-arrow-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -50%) rotate(var(--turn)) translateX(-24px);
   }
 }
 
@@ -1749,6 +1758,26 @@ select.input {
   z-index: 1;
 }
 
+/* Short screens: smaller seats, so the oval keeps its middle. */
+@media (max-height: 860px) {
+  .rt-stage {
+    padding: 54px 76px 60px;
+  }
+
+  .rt-seat {
+    padding: 5px 8px 7px;
+  }
+
+  .rt-seat .card-sm {
+    width: 40px;
+  }
+
+  .rt-seat .seat-hand > * + *,
+  .rt-played > * + * {
+    margin-left: -24px;
+  }
+}
+
 .rt-many .rt-seat {
   min-width: 110px;
   max-width: 180px;
@@ -1759,19 +1788,110 @@ select.input {
   margin-left: -38px;
 }
 
+/* A small table keeps the middle readable with smaller piles. */
+@container (max-height: 360px) {
+  .rt-zones .card-md {
+    width: 58px;
+  }
+
+  .rt-turn {
+    font-size: 18px;
+  }
+
+  .rt-ticker {
+    -webkit-line-clamp: 1;
+  }
+}
+
+.rt-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: minmax(220px, 340px) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+  margin: 0 -20px -20px;
+  padding: 12px 20px 16px;
+  border-top: 2px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: 0 -10px 24px rgb(0 0 0 / 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.rt-dock.is-turn {
+  border-top-color: var(--accent);
+}
+
+.rt-ask {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  min-height: 136px;
+}
+
+.rt-ask > .prompt-bar,
+.rt-ask > .window {
+  flex: 1;
+}
+
+.rt-ask > .window {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.rt-ask > .window > .btn {
+  grid-column: 1 / -1;
+}
+
+.rt-wait {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  color: var(--text-2);
+}
+
+.rt-wait p {
+  margin: 0;
+}
+
 .rt-hand {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border: 2px solid transparent;
-  border-radius: 14px;
-  background: var(--surface-2);
+  gap: 6px;
+  min-width: 0;
 }
 
-.rt-hand.is-turn {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+.rt-hand .hand {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding: 10px 4px 4px;
+}
+
+.rt-hand .hand > * {
+  flex: none;
+}
+
+/* Big hands (Exploding Kittens) overlap a little. The card under the pointer comes to the front. */
+.rt-hand .hand.is-fan {
+  gap: 0;
+}
+
+.rt-hand .hand.is-fan > * + * {
+  margin-left: -26px;
+}
+
+.rt-hand .hand.is-fan > *:hover,
+.rt-hand .hand.is-fan > *:focus-visible {
+  z-index: 1;
 }
 
 /* Narrow screens: no room for an oval, so the seats sit in a row above the middle. */
@@ -1784,7 +1904,9 @@ select.input {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
     gap: 10px;
-    aspect-ratio: auto;
+    width: auto;
+    height: auto;
+    container-type: normal;
     padding: 12px;
     border-width: 8px;
     border-radius: 28px;
@@ -1806,8 +1928,20 @@ select.input {
     order: -1;
   }
 
-  .rt-arrow {
+  .rt-seat.is-focus::after {
     display: none;
+  }
+
+  .rt-stage {
+    container-type: normal;
+  }
+
+  .rt-dock {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rt-ask {
+    min-height: 0;
   }
 }
 
@@ -1923,7 +2057,7 @@ select.input {
 
 @media (prefers-reduced-motion: reduce) {
   .rt-seat.is-focus,
-  .rt-arrow.is-new {
+  .rt-seat.is-focus::after {
     animation: none;
   }
 
@@ -2074,6 +2208,24 @@ dialog::backdrop {
   font-size: 22px;
 }
 
+.card-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.card-dialog-note {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  font-weight: 600;
+}
+
+.picked-text {
+  margin: 0;
+  font-size: 14px;
+}
+
 .confirm-dialog {
   display: flex;
   flex-direction: column;
@@ -2156,6 +2308,11 @@ dialog::backdrop {
 
   .dock-btn {
     flex: 1;
+  }
+
+  /* The pinned hand sits above the panel buttons. */
+  .rt-dock {
+    bottom: calc(68px + env(safe-area-inset-bottom));
   }
 
   .drawer-backdrop {

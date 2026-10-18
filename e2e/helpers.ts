@@ -30,8 +30,8 @@ export async function joinTab(context: BrowserContext, hash: string, slot: strin
 }
 
 /**
- * Plays until the game ends: whoever has a prompt answers with the first choice, accepting the
- * King Cat warning, and the host starts each next round. Returns how many moves were made.
+ * Plays until the game ends: whoever has a prompt answers with the first choice (a card opens
+ * large first, then Play), and the host starts each next round. Returns how many moves were made.
  */
 export async function playToTheEnd(host: Page, pages: Page[], maxMoves = 600): Promise<number> {
   let moves = 0;
@@ -42,8 +42,7 @@ export async function playToTheEnd(host: Page, pages: Page[], maxMoves = 600): P
       const card = page.locator('.hand .card-button.is-active').first();
       if (await card.count()) {
         await card.click();
-        const warning = page.locator('dialog.confirm-dialog .btn-danger');
-        if (await warning.count()) await warning.click();
+        await page.locator('dialog.card-dialog .card-play').click();
       } else {
         await page.locator('.prompt-bar .choice').first().click();
       }

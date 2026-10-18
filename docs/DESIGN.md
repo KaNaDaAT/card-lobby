@@ -257,8 +257,13 @@ Safety rules:
    - **Round table**: everyone seated around an oval in turn order, clockwise, you at the
      bottom. The seat the game waits on glows, an arrow and a spotlight point at it, and the
      middle says whose move it is, with the shared piles, round flags and the latest event.
-     The prompt bar and your hand sit under the table. Players move into a tab beside the
-     log. On narrow screens the seats sit in a grid instead of an oval.
+     The question and your hand sit side by side in a bar pinned to the bottom of the screen,
+     so the hand never scrolls away; when nothing is asked of you the bar says who the game
+     waits on. The oval takes the height that is left, and gets wider rather than smaller on
+     short screens. Players move into a tab beside the log. On narrow screens the seats sit
+     in a grid instead of an oval.
+   - In both, clicking a card in your hand opens it large with its text, with Play and Back.
+     Cards played in combos are picked instead, and one picked card shows its text.
 4. **Round end**: hands revealed, the winner, tokens. **Game end**: winner and rematch.
 
 ## Testing
