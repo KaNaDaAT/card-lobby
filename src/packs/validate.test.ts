@@ -156,6 +156,7 @@ describe('validatePack', () => {
         { op: 'flag', id: 'nope' },
         { op: 'passHands', who: 'all', direction: 'left' },
         { op: 'choosePlayer', as: 'a', from: 'others', except: '$b' },
+        { op: 'if', cond: { hasStatus: ['self', 'dizzy'] }, then: [{ op: 'log', text: 'Dizzy.' }] },
       ];
       card(p, 'king-cat').valueLabel = 'many';
       card(p, 'crystal-bowl').value = undefined;
@@ -170,6 +171,7 @@ describe('validatePack', () => {
         'pack.json: cards.mouse-trapper.onPlay[1].id: no flag "nope" in rules.flags',
         'pack.json: cards.mouse-trapper.onPlay[2].direction: expected next or previous',
         'pack.json: cards.mouse-trapper.onPlay[3].except: variable "$b" is not set by an earlier op',
+        'pack.json: cards.mouse-trapper.onPlay[4].cond.hasStatus[1]: no status "dizzy"',
         'pack.json: cards.king-cat.valueLabel: expected 1 to 3 characters',
         'pack.json: cards.crystal-bowl.valueLabel: needs a value to label',
       ]),

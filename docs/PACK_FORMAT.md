@@ -244,6 +244,7 @@ the current effect is skipped. The card still counts as played.
 | `{ "handHas": ["$t", "card-id"] }` | M7. The player's hand holds that card (or the card id in a variable) |
 | `{ "anyHandHas": "card-id" }` | Some player still in holds that card. Used at showdown |
 | `{ "flag": "upsideDown" }` | That round flag is on |
+| `{ "hasStatus": ["self", "lastCall"] }` | The player has that status |
 | `{ "not": C }`, `{ "all": [C] }`, `{ "any": [C] }` | Logic |
 
 ## Addons

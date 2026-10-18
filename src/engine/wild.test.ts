@@ -30,6 +30,25 @@ describe('Off the Scale', () => {
     expect(t.log()).toContain('The lowest card wins.');
   });
 
+  it('Backflip Bat: whoever plays it shows everyone the card they keep', () => {
+    const t = table();
+    const [me, a, b] = t.order;
+    t.rig(`hand:${me}`, ['backflip-bat', 'crystal-bowl']);
+    t.play('backflip-bat');
+    expect(t.seenInHand(a!, me!)).toEqual(['crystal-bowl']);
+    expect(t.seenInHand(b!, me!)).toEqual(['crystal-bowl']);
+  });
+
+  it('Backflip Bat: the second one turns the round back', () => {
+    const t = table();
+    const [me] = t.order;
+    t.s.flags = ['upsideDown'];
+    t.rig(`hand:${me}`, ['backflip-bat', 'crystal-bowl']);
+    t.play('backflip-bat');
+    expect(t.s.flags).toEqual([]);
+    expect(t.log()).toContain('The round flips back. The highest card wins the showdown again.');
+  });
+
   it('Backflip Bat: put face up by Snake Sorcerer, it turns the round too', () => {
     const t = table();
     const [me, a] = t.order;
@@ -66,19 +85,43 @@ describe('Off the Scale', () => {
     expect(t.s.result).toMatchObject({ winners: [me], lowestWins: true });
   });
 
-  it('Galaxy Goldfish: playing it calls the showdown at once', () => {
+  it('Galaxy Goldfish: last call gives everyone else one more turn, then the showdown', () => {
     const t = table();
     const [me, a, b] = t.order;
     t.rig(`hand:${me}`, ['galaxy-goldfish', 'hermit-home-swap']);
     t.rig(`hand:${a}`, ['battle-bunny']);
     t.rig(`hand:${b}`, ['crystal-bowl']);
-    expect(t.s.zones.deck!.cards.length).toBeGreaterThan(0);
+    t.rig('deck', ['shell-shield', 'shell-shield', 'mouse-trapper']);
     t.play('galaxy-goldfish');
+    expect(t.s.phase).toBe('round');
+    expect(t.view(a!).players[me!]!.statuses).toEqual(['lastCall']);
+    expect(t.log()).toContain('Last call! Everyone else takes one more turn, then the showdown.');
+    t.play('shell-shield');
+    t.play('shell-shield');
+    // The showdown comes instead of the caller's turn: no draw.
     expect(t.s.phase).toBe('roundOver');
     expect(t.s.result).toMatchObject({ by: 'showdown', winners: [me] });
-    expect(t.log()).toContain(`${t.name(me!)} calls the showdown!`);
-    expect(t.log()).toContain('Showdown!');
+    expect(t.cardIds('deck')[0]).toBe('mouse-trapper');
+    expect(t.log()).toContain('Last call is over.');
     expect(t.log()).not.toContain('The draw pile is empty. Showdown!');
+  });
+
+  it('Galaxy Goldfish: knocking out the caller stops last call', () => {
+    const t = table();
+    const [me, a, b] = t.order;
+    t.rig(`hand:${me}`, ['galaxy-goldfish', 'hermit-home-swap']);
+    t.rig(`hand:${a}`, ['crystal-bowl']);
+    t.rig(`hand:${b}`, ['battle-bunny']);
+    t.rig('deck', ['shell-shield', 'shell-shield', 'mouse-trapper']);
+    t.play('galaxy-goldfish');
+    t.play('crystal-bowl');
+    t.answer(me);
+    t.answer(8);
+    expect(t.s.players[me!]!.round).toBe('out');
+    t.play('shell-shield');
+    // The caller's turn is skipped, and the round goes on.
+    expect(t.s.phase).toBe('round');
+    expect(t.prompt).toMatchObject({ kind: 'play', to: a });
   });
 
   it('Galaxy Goldfish: held at the showdown, it beats every number', () => {

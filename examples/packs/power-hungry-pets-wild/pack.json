@@ -4,7 +4,7 @@
   "name": "Power Hungry Pets: Wild Cards",
   "version": "0.1.0",
   "author": "Card Lobby (rules adaptation, original game by Exploding Kittens)",
-  "description": "Power Hungry Pets with two house addons: Off the Scale (a -1 that turns the round upside down and an ∞ that calls the showdown) and Second Litter (new pets for 1 to 8). An example custom pack.",
+  "description": "Power Hungry Pets with two house addons: Off the Scale (a -1 that turns the round upside down and an ∞ that calls last call) and Second Litter (new pets for 1 to 8). An example custom pack.",
   "engine": "0.1",
   "players": { "min": 2, "max": 6 },
   "art": {

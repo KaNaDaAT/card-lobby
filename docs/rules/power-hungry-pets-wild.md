@@ -9,30 +9,40 @@ pick the zip with the Custom pack tile in the lobby. Then turn the addons on.
 
 ## Off the Scale
 
-Two cards beyond the usual 0 to 10. Both change how the round ends. Deck: 23 cards.
+Cards beyond the usual 0 to 10. They change how the round ends, and each one leaves the other
+players a way to answer it. Deck: 24 cards.
 
 | Value | Card | Copies | Action |
 |---|---|---|---|
-| ∞ | Galaxy Goldfish | 1 | Higher than any number. If you play it, the showdown happens right now |
-| -1 | Backflip Bat | 1 | When it is put face up in front of anyone, the round turns upside down: the lowest card wins the showdown |
+| ∞ | Galaxy Goldfish | 1 | Higher than any number. If you play it, it is last call: everyone else takes one more turn, then the showdown happens instead of your next turn |
+| -1 | Backflip Bat | 2 | When one is put face up in front of anyone, the round turns upside down (the lowest card wins the showdown), or back again. If you played it, everyone sees the card you keep |
 
-- **Galaxy Goldfish**: the showdown runs at once, before anyone draws again, even with cards
-  left in the draw pile. You show the card you kept. Held at a showdown, it beats every
-  number. It counts as 100 where numbers are added up (the "total of played cards" tie-break)
-  and in guesses, where it shows as ∞. Royal Robovac still beats it when someone holds the
-  King Cat, because the Robovac then beats every card.
+- **Galaxy Goldfish, held**: at a showdown it beats every number. It counts as 100 where
+  numbers are added up (the "total of played cards" tie-break) and in guesses, where it shows
+  as ∞. Royal Robovac still beats it when someone holds the King Cat, because the Robovac then
+  beats every card. Answers: Crystal Bowl can name ∞, Snake Sorcerer and Pillow-Fight Panda
+  put it face up (it does nothing then), Hermit Home Swap, Haggling Hamster and Penguin Parade
+  take it away, and a Backflip Bat makes it the worst card to hold.
+- **Galaxy Goldfish, played (last call)**: your seat shows "On last call". Every other player
+  still in takes one turn, then the showdown runs when your next turn would start; you do not
+  draw. Those turns are the answer: knock you out, trade cards with you, force your card face
+  up, or turn the round with a Backflip Bat. If you are knocked out before your next turn,
+  there is no early showdown and the round goes on. If the draw pile runs out first, the
+  showdown comes as usual.
 - **Backflip Bat**: works when played and when forced face up (Snake Sorcerer,
-  Pillow-Fight Panda), like the King Cat. Not when its holder is knocked out. Once upside
-  down, the round stays that way. The table shows "Upside down" while it lasts.
+  Pillow-Fight Panda), like the King Cat. Not when its holder is knocked out. Each one flips
+  the round: the second turns it back. The table shows "Upside down" while it lasts.
+- **Backflip Bat, played**: you show the card you keep to everyone, so you are flipping the
+  round in plain sight. Answers: Battle Bunny still knocks out the lower card, Crystal Bowl
+  knows what to guess, swaps take your low card, and the other Bat turns the round back.
+  Forced face up, it shows nothing (its holder had no other card).
 - **Upside down**: only the showdown turns around. Battle Bunny still knocks out the lower
   card, and the tie-break still looks for the highest played card or total. Royal Robovac's
-  "highest card" still means it wins. A Galaxy Goldfish in hand is now the worst card to hold.
-- With both: play the Bat while you hold something low, or play the Goldfish to end the round
-  before anyone can turn it back.
+  "highest card" still means it wins.
 
 ## Second Litter
 
-One new pet for each number from 1 to 8, one copy each. Deck: 29 cards (31 with Off the
+One new pet for each number from 1 to 8, one copy each. Deck: 29 cards (32 with Off the
 Scale). Each new pet's action is about as strong and as risky as the pet it shares a number
 with: low pets are cheap to give up, so their actions poke at others; high pets are worth
 keeping for the showdown, so playing one has to be worth it.

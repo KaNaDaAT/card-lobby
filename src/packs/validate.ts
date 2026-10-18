@@ -615,6 +615,11 @@ class PackChecker {
       case 'flag':
         if (!isStr(v) || !isObj(this.pack.rules.flags) || !Object.hasOwn(this.pack.rules.flags, v)) this.err(`${path}.flag`, `no flag "${String(v)}" in rules.flags`);
         return;
+      case 'hasStatus':
+        if (!Array.isArray(v) || v.length !== 2) return this.err(`${path}.hasStatus`, 'expected [player, status]');
+        this.checkPlayers(v[0], `${path}.hasStatus[0]`, scope, true);
+        if (!isStr(v[1]) || !isObj(this.pack.rules.statuses) || !Object.hasOwn(this.pack.rules.statuses, v[1])) this.err(`${path}.hasStatus[1]`, `no status "${String(v[1])}"`);
+        return;
       case 'not':
         return this.checkCond(v, `${path}.not`, scope);
       case 'all':

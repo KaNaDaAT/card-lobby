@@ -58,7 +58,7 @@ the lobby. The lobby lists any problems with their file and path. [docs/PACK_FOR
 
 `npm run zip-pack -- <folder>` zips a pack folder the way the lobby expects. To try it, zip the
 example in `examples/packs/power-hungry-pets-wild`: Power Hungry Pets with two house addons,
-Off the Scale (a -1 that turns the round upside down and an ∞ that calls the showdown) and
+Off the Scale (a -1 that turns the round upside down and an ∞ that calls last call) and
 Second Litter (a new pet for each number from 1 to 8). Its rules are in
 [docs/rules/power-hungry-pets-wild.md](docs/rules/power-hungry-pets-wild.md).
 

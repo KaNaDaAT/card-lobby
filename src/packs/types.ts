@@ -142,6 +142,7 @@ export type Condition =
   | { handHas: [string, string] }
   | { anyHandHas: string }
   | { flag: string }
+  | { hasStatus: [string, string] }
   | { not: Condition }
   | { all: Condition[] }
   | { any: Condition[] };
