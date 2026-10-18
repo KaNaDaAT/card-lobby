@@ -16,7 +16,7 @@ Read [docs/DESIGN.md](docs/DESIGN.md) before changing architecture, and
 - `npm run build` type-checks and builds static files into `dist/`
 - `npm run e2e` runs the Playwright browser tests in `e2e/` against the production build
   (`npx playwright install chromium` once per machine)
-- `npm run zip-pack -- <folder>` zips a pack folder for the lobby's Custom pack tile
+- `npm run zip-pack -- <folder>` zips a game or addon folder for the lobby's Custom pack tile
 
 ## Stack rules
 
@@ -46,8 +46,8 @@ network, no clock, seeded RNG, plain-JSON state. Only the host runs it.
 - Rules decisions for each game live in `docs/rules/`:
   [power-hungry-pets.md](docs/rules/power-hungry-pets.md),
   [exploding-kittens.md](docs/rules/exploding-kittens.md) and
-  [power-hungry-pets-wild.md](docs/rules/power-hungry-pets-wild.md) (the example custom pack's
-  house addons). Change the file together with its pack.
+  [power-hungry-pets-addons.md](docs/rules/power-hungry-pets-addons.md) (the example addon
+  zips). Change the file together with its pack.
 - Reaction windows are timed by the host's clock only. The engine gets `now` with inputs and
   never reads a clock itself.
 
@@ -63,16 +63,17 @@ network, no clock, seeded RNG, plain-JSON state. Only the host runs it.
   turns, showdown and scoring, `view.ts` per-seat views, `testing.ts` and `simulate.ts` test
   harnesses
 - `src/packs` pack types, loading, counts, addon merging, validation, and custom packs: `zip.ts`
-  (minimal reader), `custom.ts` (import a zip, blob URLs, SHA-256), `cache.ts` (IndexedDB by
-  hash, per `?as=` slot), `loader.ts` (cache first, then a checked download)
+  (minimal reader), `custom.ts` (import a game or addon zip, put uploaded addons with their game,
+  blob URLs, SHA-256), `cache.ts` (IndexedDB by hash, per `?as=` slot), `loader.ts` (cache
+  first, then a checked download)
 - `src/ui` DOM helper, router, components, screens
 - `src/identity.ts` local player id, name, color, host marker
 - `src/styles` design tokens (light and dark) and app styles
 - `e2e` browser tests (`*.e2e.ts`), several local-mode tabs acting as players
 - `.github/workflows` CI on pull requests, GitHub Pages deploy on `main`
 - `public/packs` built-in packs, one folder each, listed in `public/packs/index.json`
-- `examples/packs` packs to upload as a zip, not built in. `power-hungry-pets-wild` copies
-  Power Hungry Pets (a test keeps the copy in step) and adds two house addons
+- `examples/addons` addons to upload as a zip, not built in: two for Power Hungry Pets. A zip is
+  a game (`pack.json`) or an addon for a game the lobby has (`addon.json` with `extends`)
 - `scripts/zip-pack.mjs` zips a pack folder, no dependencies
 
 ## Testing locally

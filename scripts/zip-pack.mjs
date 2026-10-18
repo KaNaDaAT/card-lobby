@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Zips a pack folder for the Custom pack tile in the lobby: `npm run zip-pack -- <folder>`
- * writes <folder>.zip next to the folder, with pack.json at the zip's root. Node only, no
- * dependencies. Files are sorted and dated 1980-01-01, so the same folder always gives the same
- * zip (and the same hash, which players' caches go by).
+ * Zips a game or addon folder for the Custom pack tile in the lobby:
+ * `npm run zip-pack -- <folder>` writes <folder>.zip next to the folder, with pack.json (a game)
+ * or addon.json (an addon) at the zip's root. Node only, no dependencies. Files are sorted and
+ * dated 1980-01-01, so the same folder always gives the same zip (and the same hash, which
+ * players' caches go by).
  */
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
@@ -13,14 +14,19 @@ const JUNK = /(^|\/)(\.DS_Store|Thumbs\.db|desktop\.ini|__MACOSX)(\/|$)/;
 
 const folder = process.argv[2];
 if (!folder) {
-  console.error('Usage: npm run zip-pack -- <pack folder>');
+  console.error('Usage: npm run zip-pack -- <game or addon folder>');
   process.exit(1);
 }
 const root = resolve(folder);
-try {
-  statSync(join(root, 'pack.json'));
-} catch {
-  console.error(`${folder} has no pack.json`);
+const has = (name) => {
+  try {
+    return statSync(join(root, name)).isFile();
+  } catch {
+    return false;
+  }
+};
+if (has('pack.json') === has('addon.json')) {
+  console.error(`${folder} needs either a pack.json (a game) or an addon.json (an addon)`);
   process.exit(1);
 }
 

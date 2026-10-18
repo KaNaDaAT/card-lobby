@@ -152,6 +152,9 @@ export interface Addon {
   id: string;
   name: string;
   description: string;
+  /** In an addon's own zip: the id of the game it extends, like "power-hungry-pets". */
+  extends?: string;
+  author?: string;
   image?: string;
   requires?: string[];
   conflicts?: string[];
@@ -172,6 +175,9 @@ export interface Addon {
 export interface PackOffer {
   /** SHA-256 of the zip, hex. */
   hash: string;
+  /** A whole game, or an addon for the game named by `extends` (its pack id). */
+  kind: 'game' | 'addon';
+  extends?: string;
   name: string;
   author?: string;
   bytes: number;
@@ -188,4 +194,22 @@ export interface LoadedPack {
   asset(path: string): string;
   /** Uploaded packs keep their zip, to send to other players. */
   custom?: { bytes: Uint8Array; offer: PackOffer };
+  /** Addons that came in their own zips, at the end of `addons`. */
+  uploads?: LoadedAddon[];
+}
+
+/**
+ * An addon uploaded in its own zip. Its image paths start with `prefix`, so they cannot clash
+ * with the game's own files once the two are put together.
+ */
+export interface LoadedAddon {
+  /** `custom-addon:<hash>`. */
+  key: string;
+  /** The pack id of the game it extends. */
+  gameId: string;
+  addon: Addon;
+  prefix: string;
+  /** Turns one of the addon's (prefixed) image paths into a URL. */
+  asset(path: string): string;
+  custom: { bytes: Uint8Array; offer: PackOffer };
 }

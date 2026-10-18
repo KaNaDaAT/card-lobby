@@ -1,6 +1,8 @@
 {
   "format": 1,
   "id": "off-the-scale",
+  "extends": "power-hungry-pets",
+  "author": "Card Lobby (house design)",
   "name": "Off the Scale",
   "description": "Cards beyond the numbers. Two Backflip Bats (-1) turn the round upside down and back, so the lowest card wins. The Galaxy Goldfish (∞) beats every number and calls last call: one more turn for everyone else, then the showdown. House design, balance untested.",
   "image": "art/addon-off-the-scale.svg",

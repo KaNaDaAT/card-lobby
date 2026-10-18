@@ -16,7 +16,7 @@ import { avatar, brandMark, pill } from '../components/bits';
 import { h, replace, type Child } from '../dom';
 import { roomLink, type Screen } from '../router';
 import { packConsent } from '../components/packs';
-import { lobbyMain, playersPanel, resolvePack, type RoomCtx } from './lobby';
+import { lobbyMain, needsFiles, playersPanel, resolvePack, type RoomCtx } from './lobby';
 import { logPanel, newTableMemo, tableLayout, tableMain, type TableMemo } from './table';
 
 const DEFAULT_ACCENT = '#9d85ff';
@@ -191,8 +191,8 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
 
   const drawView = (c: RoomCtx, view: View) => {
     if (view.game && view.lobby.phase === 'playing') {
-      // Someone who joined a custom game late needs the pack before they can watch.
-      const table = view.lobby.customPack && !resolvePack(c, view.lobby) ? [packConsent(c, view.lobby)] : tableMain(c, view.lobby, view.game, memo);
+      // Someone who joined a custom game late needs its files before they can watch.
+      const table = needsFiles(view.lobby) && !resolvePack(c, view.lobby) ? [packConsent(c, view.lobby)] : tableMain(c, view.lobby, view.game, memo);
       const players = playersPanel(c, view.lobby, view.game);
       const log = logPanel(view.game);
       if (tableLayout() === 'round') {
@@ -247,8 +247,10 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
     try {
       const hosting = isHosting(code);
       const packs = await loadBuiltInPacks();
-      // The host's gallery also shows the custom packs this browser has.
+      // The host's gallery also shows the custom games and addons this browser has.
       const custom = hosting ? await loadCachedPacks() : [];
+      const customGames = custom.flatMap((c) => (c.kind === 'game' ? [c.pack] : []));
+      const customAddons = custom.flatMap((c) => (c.kind === 'addon' ? [c.addon] : []));
       if (disposed) return;
       // The session must exist before any network event runs, or it misses peer joins.
       const transport = await openTransport(code, local);
@@ -261,7 +263,8 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
             code,
             me,
             transport,
-            packs: [...packs, ...custom],
+            packs: [...packs, ...customGames],
+            addons: customAddons,
             store: { load: () => loadRoomSnapshot(code), save: (data) => saveRoomSnapshot(code, data) },
           })
         : null;

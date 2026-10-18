@@ -24,8 +24,9 @@ import {
   type View,
 } from '../net/protocol';
 import type { Channel, Transport } from '../net/transport';
+import { uploadProblems, withUploads } from '../packs/custom';
 import { mergeAddons } from '../packs/merge';
-import type { LoadedPack, OptionValue, Pack, PackOffer } from '../packs/types';
+import type { LoadedAddon, LoadedPack, OptionValue, Pack, PackOffer } from '../packs/types';
 import { validateSelection } from '../packs/validate';
 import { mergeSelection, optionValueOk, startBlocked, type Selection } from './lobby';
 import type { Session, SessionState } from './types';
@@ -41,8 +42,10 @@ export interface HostOptions {
   code: string;
   me: Identity;
   transport: Transport;
-  /** Games the host can pick. Built-in packs for now. */
+  /** Games the host can pick: built-in ones and any uploaded before. */
   packs: LoadedPack[];
+  /** Addons uploaded in their own zips before. Each joins the game it extends, if it fits. */
+  addons?: LoadedAddon[];
   store?: SnapshotStore;
   now?: () => number;
   /** Seeds each game's PRNG. Random by default. */
@@ -121,9 +124,11 @@ export class HostSession implements Session {
   private seq = 0;
   private chatCounter = 0;
   private ownView: View | null = null;
-  /** Where each member stands with the active custom pack, by playerId. */
-  private packStatus = new Map<string, PackStatus>();
-  /** How often each member got the active custom pack, by playerId. */
+  /** Addons uploaded in their own zips, in upload order. */
+  private uploads: LoadedAddon[] = [];
+  /** Where each member stands with each custom file the lobby uses: playerId, then hash. */
+  private fileStatus = new Map<string, Map<string, PackStatus>>();
+  /** How often each member got each file, by `playerId|hash`. */
   private transfers = new Map<string, number>();
   /** The timer that closes the open reaction window, and when that window ends. */
   private windowTimer: { handle: unknown; endsAt: number } | null = null;
@@ -132,6 +137,7 @@ export class HostSession implements Session {
     this.code = opts.code;
     this.transport = opts.transport;
     this.packs = [...opts.packs];
+    for (const upload of opts.addons ?? []) this.addAddon(upload, false);
     this.store = opts.store;
     this.now = opts.now ?? Date.now;
     this.seed = opts.seed ?? randomSeed;
@@ -194,7 +200,14 @@ export class HostSession implements Session {
 
   state(): SessionState {
     const active = this.activePack();
-    return { status: 'connected', view: this.ownView, chat: this.chat, customPack: active?.custom ? active : null, packOffer: null };
+    return {
+      status: 'connected',
+      view: this.ownView,
+      chat: this.chat,
+      customPack: active?.custom ? active : null,
+      customAddons: active?.uploads ?? [],
+      packOffers: [],
+    };
   }
 
   subscribe(cb: () => void): () => void {
@@ -215,7 +228,7 @@ export class HostSession implements Session {
   }
 
   availablePacks(): LoadedPack[] {
-    return [...this.packs];
+    return this.games();
   }
 
   /** Adds an uploaded pack to the gallery. Selecting it is up to the host. */
@@ -231,6 +244,35 @@ export class HostSession implements Session {
     if (!lp?.custom || this.packId === key || this.game?.packId === key) return false;
     this.packs = this.packs.filter((p) => p !== lp);
     this.notify();
+    return true;
+  }
+
+  /**
+   * Adds an addon from its own zip to the game it extends. Returns why it cannot be added, or
+   * an empty list. Turning it on is up to the host.
+   */
+  addAddon(upload: LoadedAddon, notify = true): string[] {
+    if (this.uploads.some((u) => u.key === upload.key)) return [];
+    const bases = this.packs.filter((p) => p.pack.id === upload.gameId);
+    if (!bases.length) return [`${upload.addon.name} is an addon for the game "${upload.gameId}", which this lobby does not have.`];
+    for (const base of bases) {
+      const problems = uploadProblems(base, upload, this.uploads.filter((u) => u.gameId === upload.gameId));
+      if (problems.length) return problems;
+    }
+    this.uploads.push(upload);
+    if (notify) this.notify();
+    return [];
+  }
+
+  /** Takes an uploaded addon away, unless the running game uses it. Turns it off first. */
+  removeAddon(key: string): boolean {
+    const upload = this.uploads.find((u) => u.key === key);
+    if (!upload) return false;
+    const inGame = this.game && this.activePack()?.uploads?.includes(upload) && this.game.addons.includes(upload.addon.id);
+    if (inGame) return false;
+    if (this.loadedPack()?.uploads?.includes(upload)) this.addons = this.addons.filter((id) => id !== upload.addon.id);
+    this.uploads = this.uploads.filter((u) => u !== upload);
+    this.broadcast();
     return true;
   }
 
@@ -269,8 +311,8 @@ export class HostSession implements Session {
     // View first: clients lock onto the host by its first view and ignore chat before that.
     this.broadcast();
     void this.out.chat.send({ messages: this.chat, history: true }, peerId);
-    // A fresh page has no pack loaded yet, even if it said yes before. Offer again.
-    this.offerPack(member);
+    // A fresh page has nothing custom loaded yet, even if it said yes before. Offer again.
+    this.offerFiles(member);
   }
 
   private onPeerLeave(peerId: string): void {
@@ -333,7 +375,7 @@ export class HostSession implements Session {
         break;
     }
     if (changed) this.broadcast();
-    if (changed && intent.kind === 'selectPack') for (const m of this.members) this.offerPack(m);
+    if (changed && (intent.kind === 'selectPack' || (intent.kind === 'toggleAddon' && intent.on))) for (const m of this.members) this.offerFiles(m);
   }
 
   private selectPack(packId: string): boolean {
@@ -341,44 +383,67 @@ export class HostSession implements Session {
     this.packId = packId;
     this.addons = [];
     this.options = {};
-    this.packStatus.clear();
+    this.fileStatus.clear();
     this.transfers.clear();
     return true;
   }
 
   // ---------- Custom packs ----------
 
-  /** Offers the active custom pack to a member. Someone who declined stays declined until they answer. */
-  private offerPack(member: Member): void {
-    const offer = this.activePack()?.custom?.offer;
-    if (!offer || member === this.members[0] || !member.peerId) return;
-    if (this.packStatus.get(member.playerId) !== 'declined') this.packStatus.set(member.playerId, 'offered');
-    void this.out.packOffer.send(offer, member.peerId);
+  /** Custom files the lobby uses and players need: the game, if uploaded, then uploaded addons that are on. */
+  private neededFiles(): { offer: PackOffer; bytes: Uint8Array }[] {
+    const lp = this.activePack();
+    if (!lp) return [];
+    const on = this.game?.addons ?? this.addons;
+    const addons = (lp.uploads ?? []).filter((u) => on.includes(u.addon.id)).map((u) => u.custom);
+    return [...(lp.custom ? [lp.custom] : []), ...addons];
+  }
+
+  private statusesOf(member: Member): Map<string, PackStatus> {
+    let map = this.fileStatus.get(member.playerId);
+    if (!map) this.fileStatus.set(member.playerId, (map = new Map()));
+    return map;
+  }
+
+  /** Offers each custom file the lobby uses to a member. Someone who declined stays declined until they answer. */
+  private offerFiles(member: Member): void {
+    if (member === this.members[0] || !member.peerId) return;
+    const statuses = this.statusesOf(member);
+    for (const { offer } of this.neededFiles()) {
+      if (statuses.get(offer.hash) !== 'declined') statuses.set(offer.hash, 'offered');
+      void this.out.packOffer.send(offer, member.peerId);
+    }
   }
 
   private onPackReply(member: Member, reply: PackReply): void {
-    const custom = this.activePack()?.custom;
-    if (!custom || reply.hash !== custom.offer.hash || member === this.members[0] || !member.peerId) return;
-    const id = member.playerId;
+    const file = this.neededFiles().find((f) => f.offer.hash === reply.hash);
+    if (!file || member === this.members[0] || !member.peerId) return;
+    const statuses = this.statusesOf(member);
     if (reply.accept && reply.cached) {
-      this.packStatus.set(id, 'ready');
+      statuses.set(reply.hash, 'ready');
     } else if (reply.accept) {
-      // One transfer at a time, and only a few per player.
-      const sent = this.transfers.get(id) ?? 0;
-      if (this.packStatus.get(id) === 'downloading' || sent >= MAX_TRANSFERS) return;
-      this.transfers.set(id, sent + 1);
-      this.packStatus.set(id, 'downloading');
-      void this.out.packData.send(custom.bytes, member.peerId);
+      // One transfer at a time per player, and only a few of each file.
+      const key = `${member.playerId}|${reply.hash}`;
+      const sent = this.transfers.get(key) ?? 0;
+      if ([...statuses.values()].includes('downloading') || sent >= MAX_TRANSFERS) return;
+      this.transfers.set(key, sent + 1);
+      statuses.set(reply.hash, 'downloading');
+      void this.out.packData.send(file.bytes, member.peerId);
     } else {
-      this.packStatus.set(id, reply.error ? 'failed' : 'declined');
-      if (reply.error) this.system(`${member.name} could not load the pack: ${reply.error}`);
+      statuses.set(reply.hash, reply.error ? 'failed' : 'declined');
+      if (reply.error) this.system(`${member.name} could not load ${file.offer.name}: ${reply.error}`);
     }
     this.broadcast();
   }
 
+  /** One status for all the custom files a member needs: the least ready one counts. */
   private packStatusOf(member: Member): PackStatus {
-    if (member === this.members[0] || !this.activePack()?.custom) return 'ready';
-    return this.packStatus.get(member.playerId) ?? 'offered';
+    const files = this.neededFiles();
+    if (member === this.members[0] || !files.length) return 'ready';
+    const statuses = this.fileStatus.get(member.playerId);
+    const all = files.map((f) => statuses?.get(f.offer.hash) ?? 'offered');
+    for (const status of ['failed', 'declined', 'downloading', 'offered'] as const) if (all.includes(status)) return status;
+    return 'ready';
   }
 
   private toggleAddon(addonId: string, on: boolean): boolean {
@@ -508,14 +573,19 @@ export class HostSession implements Session {
 
   // ---------- Views ----------
 
+  /** Every game, each with the addons uploaded for it. */
+  private games(): LoadedPack[] {
+    return this.packs.map((lp) => withUploads(lp, this.uploads.filter((u) => u.gameId === lp.pack.id)));
+  }
+
   private loadedPack(): LoadedPack | undefined {
-    return this.packs.find((p) => p.key === this.packId);
+    return this.games().find((p) => p.key === this.packId);
   }
 
   /** The pack in use: the running game's, or the one picked in the lobby. */
   private activePack(): LoadedPack | undefined {
     const key = this.game?.packId ?? this.packId;
-    return this.packs.find((p) => p.key === key);
+    return this.games().find((p) => p.key === key);
   }
 
   private selection(): Selection | null {
@@ -539,7 +609,8 @@ export class HostSession implements Session {
   private packProblems(): string[] {
     const lp = this.loadedPack();
     if (!lp) return [];
-    const key = `${lp.key}|${[...this.addons].sort().join(',')}`;
+    const uploads = (lp.uploads ?? []).map((u) => u.key).join(',');
+    const key = `${lp.key}|${uploads}|${[...this.addons].sort().join(',')}`;
     let errors = this.validation.get(key);
     if (!errors) {
       errors = validateSelection(lp, this.addons);
@@ -586,6 +657,9 @@ export class HostSession implements Session {
       addons: [...(game?.addons ?? this.addons)],
       options: game ? { ...game.state.options } : { ...this.options },
       customPack: this.activePack()?.custom?.offer ?? null,
+      customAddons: this.neededFiles()
+        .map((f) => f.offer)
+        .filter((o) => o.kind === 'addon'),
       startBlocked: game ? this.nextRoundProblem(game.state) : this.startProblem(selection, this.seated(selection)),
     };
   }
@@ -663,8 +737,9 @@ export class HostSession implements Session {
 
   /** Rebuilds a saved game. Everyone but the host counts as away until they say hello. */
   private resumeGame(saved: Snapshot['game'] | undefined): Game | null {
-    const lp = saved && this.packs.find((p) => p.key === saved.packId);
-    if (!saved || !lp) return null;
+    const lp = saved && this.games().find((p) => p.key === saved.packId);
+    // A game whose uploaded addon is gone cannot go on.
+    if (!saved || !lp || !saved.addons.every((id) => lp.addons.some((a) => a.id === id))) return null;
     try {
       const game: Game = { ...saved, pack: mergeAddons(lp.pack, lp.addons, saved.addons) };
       for (const p of game.state.players) p.connected = p.playerId === this.playerId;

@@ -1,7 +1,7 @@
 /**
- * The Off the Scale and Second Litter addons of the example pack in
- * examples/packs/power-hungry-pets-wild, card by card, as described in
- * docs/rules/power-hungry-pets-wild.md. `order` is [active player, next, next after that].
+ * The example addons for Power Hungry Pets in examples/addons, Off the Scale and Second
+ * Litter, card by card, as described in docs/rules/power-hungry-pets-addons.md. `order` is
+ * [active player, next, next after that].
  */
 import { describe, expect, it } from 'vitest';
 import { Table, wildPack } from './testing';

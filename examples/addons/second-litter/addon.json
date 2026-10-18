@@ -1,6 +1,8 @@
 {
   "format": 1,
   "id": "second-litter",
+  "extends": "power-hungry-pets",
+  "author": "Card Lobby (house design)",
   "name": "Second Litter",
   "description": "One new pet for each number from 1 to 8, with a different action of about the same strength and risk. House design, balance untested.",
   "image": "art/addon-second-litter.svg",

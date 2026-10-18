@@ -1,11 +1,14 @@
-# Power Hungry Pets, Wild Cards: house addons
+# Power Hungry Pets: house addons
 
-An example custom pack in `examples/packs/power-hungry-pets-wild`. It is Power Hungry Pets
-(rules in [power-hungry-pets.md](power-hungry-pets.md), unchanged) plus two addons of our own
-design. Keep this file and the pack in sync. Balance is untested: change it after playing.
+Two addons of our own design for Power Hungry Pets (rules in
+[power-hungry-pets.md](power-hungry-pets.md), unchanged), each in its own folder under
+`examples/addons`, to upload as a zip. Keep this file and the addons in sync. Balance is
+untested: change it after playing.
 
-To play it, zip the folder (`npm run zip-pack -- examples/packs/power-hungry-pets-wild`) and
-pick the zip with the Custom pack tile in the lobby. Then turn the addons on.
+To play with them, zip each folder (`npm run zip-pack -- examples/addons/off-the-scale` and
+`npm run zip-pack -- examples/addons/second-litter`) and pick each zip with the Custom pack tile
+in the lobby. Each joins Power Hungry Pets and turns on. Players accept them before they
+download.
 
 ## Off the Scale
 

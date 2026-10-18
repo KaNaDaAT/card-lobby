@@ -31,6 +31,7 @@ describe('importPackZip', () => {
     expect(lp.addons.map((a) => a.id)).toEqual(['big-litter']);
     expect(lp.custom?.offer).toEqual({
       hash,
+      kind: 'game',
       name: 'Power Hungry Pets',
       author: 'Card Lobby (rules adaptation, original game by Exploding Kittens)',
       bytes: zip.length,
@@ -53,7 +54,7 @@ describe('importPackZip', () => {
     expect((await problems({ ...PETS, 'pack.json': '{ nope' }))[0]).toMatch(/^pack\.json: not valid JSON/);
     const { 'addons/big-litter.json': _gone, ...noAddon } = PETS;
     expect(await problems(noAddon)).toEqual(['addons/big-litter.json: missing from the zip']);
-    expect(await problems({ 'readme.json': '{}' })).toEqual(['pack.json: missing from the zip']);
+    expect(await problems({ 'readme.json': '{}' })).toEqual(['The zip has no pack.json (for a game) or addon.json (for an addon).']);
   });
 
   it('runs full validation, including missing images and addon problems', async () => {

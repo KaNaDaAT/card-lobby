@@ -2208,6 +2208,10 @@ dialog::backdrop {
   font-size: 22px;
 }
 
+.addon-remove {
+  align-self: flex-start;
+}
+
 .card-dialog-actions {
   display: flex;
   flex-wrap: wrap;

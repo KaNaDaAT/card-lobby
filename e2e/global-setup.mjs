@@ -1,6 +1,8 @@
-// Zips the example pack before the browser tests, so they upload what `npm run zip-pack` makes.
+// Zips the example addons before the browser tests, so they upload what `npm run zip-pack` makes.
 import { execFileSync } from 'node:child_process';
 
 export default function globalSetup() {
-  execFileSync(process.execPath, ['scripts/zip-pack.mjs', 'examples/packs/power-hungry-pets-wild'], { stdio: 'inherit' });
+  for (const folder of ['examples/addons/off-the-scale', 'examples/addons/second-litter']) {
+    execFileSync(process.execPath, ['scripts/zip-pack.mjs', folder], { stdio: 'inherit' });
+  }
 }

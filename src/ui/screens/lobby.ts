@@ -6,14 +6,15 @@ import type { GameView } from '../../engine/types';
 import type { Identity } from '../../identity';
 import type { LobbyView } from '../../net/protocol';
 import { resolveCount } from '../../packs/count';
+import { withUploads } from '../../packs/custom';
 import { addonProblems } from '../../packs/merge';
-import type { Count, LoadedPack, OptionDef, OptionValue } from '../../packs/types';
+import type { Count, LoadedAddon, LoadedPack, OptionDef, OptionValue } from '../../packs/types';
 import { AUTO, mergeSelection } from '../../session/lobby';
 import type { HostSession } from '../../session/host';
 import type { Session } from '../../session/types';
 import { avatar, pill, section } from '../components/bits';
 import { cardFace } from '../components/card';
-import { packBadge, packConsent, removeUpload, uploadProblems, uploadTile } from '../components/packs';
+import { packBadge, packConsent, removeAddonUpload, removeUpload, uploadProblems, uploadTile } from '../components/packs';
 import { h, type Child } from '../dom';
 
 export interface RoomCtx {
@@ -29,13 +30,28 @@ export interface RoomCtx {
   redraw(): void;
 }
 
-/** The pack the lobby uses, if this page has it: a built-in one, or the custom pack once loaded. */
+/** Whether the lobby uses anything uploaded, which players need before they can see it. */
+export function needsFiles(lobby: LobbyView): boolean {
+  return Boolean(lobby.customPack) || lobby.customAddons.length > 0;
+}
+
+/**
+ * The pack the lobby uses, if this page has everything for it: the game (built in, or the
+ * custom one once loaded) with any addons that came in their own zips.
+ */
 export function resolvePack(ctx: RoomCtx, lobby: LobbyView): LoadedPack | undefined {
-  if (lobby.customPack) {
-    const custom = ctx.session.state().customPack;
-    return custom?.custom?.offer.hash === lobby.customPack.hash ? custom : undefined;
-  }
-  return ctx.packs.find((p) => p.key === lobby.packId);
+  // The host has it all, with every uploaded addon for the game, on or off.
+  if (ctx.session.isHost) return ctx.session.availablePacks().find((p) => p.key === lobby.packId);
+  const state = ctx.session.state();
+  const base = lobby.customPack
+    ? state.customPack?.custom?.offer.hash === lobby.customPack.hash
+      ? state.customPack
+      : undefined
+    : ctx.packs.find((p) => p.key === lobby.packId);
+  if (!base) return undefined;
+  const addons = lobby.customAddons.map((o) => state.customAddons.find((a) => a.custom.offer.hash === o.hash));
+  if (addons.some((a) => !a)) return undefined;
+  return withUploads(base, addons as LoadedAddon[]);
 }
 
 export function lobbyMain(ctx: RoomCtx, lobby: LobbyView): Child[] {
@@ -44,7 +60,7 @@ export function lobbyMain(ctx: RoomCtx, lobby: LobbyView): Child[] {
     ctx.session.isHost ? gallery(ctx, lobby) : null,
     lp
       ? gameDetail(ctx, lobby, lp)
-      : lobby.customPack
+      : needsFiles(lobby)
         ? packConsent(ctx, lobby)
         : h(
           'section',
@@ -128,6 +144,11 @@ function gameDetail(ctx: RoomCtx, lobby: LobbyView, lp: LoadedPack): HTMLElement
       const on = lobby.addons.includes(a.id);
       const next = on ? lobby.addons.filter((id) => id !== a.id) : [...lobby.addons, a.id];
       const reason = editable ? addonProblems(lp.addons, next)[0] : undefined;
+      const upload = lp.uploads?.find((u) => u.addon === a);
+      const tags = [
+        a.players?.max ? pill(`Up to ${a.players.max} players`) : null,
+        upload ? pill(upload.custom.offer.author ? `Uploaded, by ${upload.custom.offer.author}` : 'Uploaded') : null,
+      ].filter(Boolean);
       return h(
         'label',
         { class: `addon${on ? ' is-on' : ''}` },
@@ -137,8 +158,11 @@ function gameDetail(ctx: RoomCtx, lobby: LobbyView, lp: LoadedPack): HTMLElement
           { class: 'addon-text' },
           h('span', { class: 'addon-name' }, a.name),
           h('span', { class: 'addon-desc' }, a.description),
-          a.players?.max ? h('span', { class: 'addon-tags' }, pill(`Up to ${a.players.max} players`)) : null,
+          tags.length ? h('span', { class: 'addon-tags' }, tags) : null,
           reason ? h('span', { class: 'addon-warn' }, reason) : null,
+          upload && editable && !on
+            ? h('button', { type: 'button', class: 'btn btn-xs addon-remove', onclick: (e: Event) => (e.preventDefault(), removeAddonUpload(ctx, upload)) }, 'Remove')
+            : null,
         ),
         editable
           ? h('input', {

@@ -4,7 +4,7 @@ import type { OptionValue, PackOffer } from '../packs/types';
 
 export type { PackOffer } from '../packs/types';
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** Trystero action names. Kept short, Trystero limits their length. */
 export const ACTION = {
@@ -48,7 +48,7 @@ export interface LobbyPlayer {
   connected: boolean;
   isHost: boolean;
   role: 'player' | 'spectator';
-  /** Where the player stands with the lobby's pack. Built-in packs are always ready. */
+  /** Where the player stands with the lobby's custom files (game and addons). Built-in ones are always ready. */
   pack: PackStatus;
 }
 
@@ -63,7 +63,10 @@ export interface LobbyView {
   packId: string | null;
   addons: string[];
   options: Record<string, OptionValue>;
+  /** The custom game in use, when the game is not built in. */
   customPack: PackOffer | null;
+  /** Addons in use that came in their own zips, in merge order. */
+  customAddons: PackOffer[];
   /** Why Start is disabled, or null when the host can start. */
   startBlocked: string | null;
 }

@@ -31,6 +31,9 @@ A custom pack is the same folder zipped, with `pack.json` at the root of the zip
 top folder (what zipping the folder itself gives you). Only `.json` files and png, jpg, webp or
 svg images may be in it. Limits: 25 MB for the zip, 2 MB per image, 1 MB per JSON file.
 
+An addon can also come in a zip of its own, for a game the lobby already has (built in or
+uploaded). See "Addon zips" below. `npm run zip-pack -- <folder>` zips either kind.
+
 ## pack.json
 
 | Field | Type | Notes |
@@ -285,6 +288,35 @@ Merge rules:
 - `options.add` appends options. `options.modify` merges fields into an existing option.
 - `players` overrides `min` and `max`.
 - `requires` and `conflicts` list other addon ids of the same pack. The lobby enforces them.
+
+## Addon zips
+
+An addon for an existing game, uploaded on its own. The zip holds `addon.json` and its images,
+nothing else is needed from the game:
+
+```
+my-addon/
+  addon.json
+  art/
+    addon.svg
+    new-card.svg
+```
+
+`addon.json` is an addon file as above, plus:
+
+| Field | Type | Notes |
+|---|---|---|
+| `extends` | string | The pack id of the game it is for, like `"power-hungry-pets"` |
+| `author` | string | Optional. Shown to players before they download it |
+
+- Image paths are relative to the zip. Every image an addon card names must be in the zip.
+- It is merged after the game's own addons, in the order addons were uploaded. `requires` and
+  `conflicts` may name the game's addons and other uploaded ones.
+- Its id must be new for that game.
+- Errors name it by its name, like `Second Litter/addon.json: cards.penguin-parade.onPlay[1]:
+  unknown op "passhands"`.
+
+Examples: [examples/addons](../examples/addons), two addons for Power Hungry Pets.
 
 ## Validation
 

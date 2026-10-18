@@ -16,5 +16,5 @@ Thumbs.db
 test-results/
 playwright-report/
 
-# Zipped example packs, built with npm run zip-pack
-examples/packs/*.zip
+# Zipped examples, built with npm run zip-pack
+examples/**/*.zip

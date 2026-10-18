@@ -1,12 +1,12 @@
-/** Custom packs through the session: offer, consent, transfer, checks, cache. */
+/** Custom games and addons through the session: offer, consent, transfer, checks, cache. */
 import { describe, expect, it } from 'vitest';
 import petsJson from '../../public/packs/power-hungry-pets/pack.json';
 import type { Identity } from '../identity';
 import { createMemoryNetwork } from '../net/memory';
-import { ACTION } from '../net/protocol';
-import { importPackZip } from '../packs/custom';
+import { ACTION, PROTOCOL_VERSION } from '../net/protocol';
+import { importPackZip, importZip } from '../packs/custom';
 import type { PackLoader } from '../packs/loader';
-import type { LoadedPack, Pack } from '../packs/types';
+import type { LoadedAddon, LoadedPack, Pack } from '../packs/types';
 import { writeZip } from '../packs/zip';
 import { ClientSession } from './client';
 import { HostSession } from './host';
@@ -35,12 +35,12 @@ function memoryLoader(): PackLoader & { store: Map<string, Uint8Array> } {
     store,
     async cached(hash) {
       const bytes = store.get(hash);
-      return bytes ? importPackZip(bytes, { url, expectHash: hash }) : null;
+      return bytes ? importZip(bytes, { url, expectHash: hash }) : null;
     },
     async load(bytes, hash) {
-      const lp = await importPackZip(bytes, { url, expectHash: hash });
+      const item = await importZip(bytes, { url, expectHash: hash });
       store.set(hash, bytes);
-      return lp;
+      return item;
     },
   };
 }
@@ -63,6 +63,7 @@ async function setup() {
 }
 
 const players = (host: HostSession) => host.state().view!.lobby.players.map((p) => `${p.name}:${p.pack}:${p.role}`);
+const offerOf = (client: ClientSession, i = 0) => client.state().packOffers[i];
 
 describe('custom packs', () => {
   it('offers the pack, asks for consent, sends it on yes and starts when everyone has it', async () => {
@@ -74,13 +75,13 @@ describe('custom packs', () => {
     await settle(net);
 
     expect(tom.state().view!.lobby.customPack).toEqual(lp.custom!.offer);
-    expect(tom.state().packOffer).toMatchObject({ status: 'asking', offer: { name: 'House Pets' } });
+    expect(offerOf(tom)).toMatchObject({ status: 'asking', offer: { name: 'House Pets' } });
     expect(players(host)).toEqual(['Hana:ready:player', 'Tom:offered:player']);
     expect(host.state().view!.lobby.startBlocked).toBe('Waiting for Tom to get the pack.');
 
     tom.answerPackOffer(true);
     await settle(net);
-    expect(tom.state().packOffer?.status).toBe('ready');
+    expect(offerOf(tom)?.status).toBe('ready');
     expect(tom.state().customPack?.pack.name).toBe('House Pets');
     expect(players(host)).toEqual(['Hana:ready:player', 'Tom:ready:player']);
     expect(host.state().view!.lobby.startBlocked).toBeNull();
@@ -117,7 +118,7 @@ describe('custom packs', () => {
     host.act({ kind: 'selectPack', packId: lp.key });
     const tom = join('Tom', loader);
     await settle(net);
-    expect(tom.state().packOffer?.status).toBe('ready');
+    expect(offerOf(tom)?.status).toBe('ready');
     expect(players(host)).toContain('Tom:ready:player');
 
     tom.leave();
@@ -138,9 +139,9 @@ describe('custom packs', () => {
     await settle(net);
     tom.answerPackOffer(true);
     await settle(net);
-    expect(tom.state().packOffer).toMatchObject({ status: 'failed', error: 'The pack arrived damaged (its checksum does not match).' });
+    expect(offerOf(tom)).toMatchObject({ status: 'failed', error: 'The pack arrived damaged (its checksum does not match).' });
     expect(players(host)).toEqual(['Hana:ready:player', 'Tom:failed:spectator']);
-    expect(host.state().chat.at(-1)?.text).toBe('Tom could not load the pack: The pack arrived damaged (its checksum does not match).');
+    expect(host.state().chat.at(-1)?.text).toBe('Tom could not load House Pets: The pack arrived damaged (its checksum does not match).');
   });
 
   it('ignores pack data nobody asked for or from anyone but the host', async () => {
@@ -152,7 +153,7 @@ describe('custom packs', () => {
     const evil = net.join('evil');
     void evil.channel<Uint8Array>(ACTION.packData).send(lp.custom!.bytes, 'tom');
     await settle(net);
-    expect(tom.state().packOffer?.status).toBe('asking');
+    expect(offerOf(tom)?.status).toBe('asking');
     expect(tom.state().customPack).toBeNull();
   });
 
@@ -163,7 +164,7 @@ describe('custom packs', () => {
     const greedy = net.join('greedy');
     let received = 0;
     greedy.channel<Uint8Array>(ACTION.packData).onMessage(() => received++);
-    void greedy.channel(ACTION.hello).send({ protocol: 2, playerId: 'g', name: 'Greedy', color: '#000000', cachedPacks: [] }, 'host');
+    void greedy.channel(ACTION.hello).send({ protocol: PROTOCOL_VERSION, playerId: 'g', name: 'Greedy', color: '#000000', cachedPacks: [] }, 'host');
     await settle(net);
     for (let i = 0; i < 6; i++) {
       // Decline in between, so the host is not waiting on a transfer.
@@ -185,5 +186,102 @@ describe('custom packs', () => {
     host.act({ kind: 'selectPack', packId: 'power-hungry-pets' });
     expect(host.removePack(lp.key)).toBe(true);
     expect(host.removePack('power-hungry-pets')).toBe(false);
+  });
+});
+
+/** A small addon zip: one more card, with art. */
+async function goldBowls(gameId = 'power-hungry-pets', description = 'One more card.'): Promise<LoadedAddon> {
+  const id = 'gold-bowls';
+  const addon = {
+    format: 1,
+    id,
+    name: 'Gold Bowls',
+    description,
+    extends: gameId,
+    author: 'A Friend',
+    image: 'art/gold.svg',
+    cards: { add: [{ id: `${id}-card`, name: 'Gold Bowl', value: 1, count: 1, text: 'No action.', image: 'art/gold.svg' }] },
+  };
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"/>';
+  const item = await importZip(await writeZip({ 'addon.json': JSON.stringify(addon), 'art/gold.svg': svg }), { url });
+  if (item.kind !== 'addon') throw new Error('expected an addon');
+  return item.addon;
+}
+
+describe('addon zips', () => {
+  it('joins its game, is offered once it is on, and the game plays with it', async () => {
+    const { net, host, join } = await setup();
+    const tom = join('Tom');
+    await settle(net);
+    const addon = await goldBowls();
+    expect(host.addAddon(addon)).toEqual([]);
+    expect(host.availablePacks()[0]!.addons.map((a) => a.id)).toContain('gold-bowls');
+    await settle(net);
+    expect(tom.state().view!.lobby.customAddons).toEqual([]);
+    expect(tom.state().packOffers).toEqual([]);
+
+    host.act({ kind: 'toggleAddon', addonId: 'gold-bowls', on: true });
+    await settle(net);
+    expect(tom.state().view!.lobby.customAddons).toEqual([addon.custom.offer]);
+    expect(offerOf(tom)).toMatchObject({ status: 'asking', offer: { kind: 'addon', extends: 'power-hungry-pets', author: 'A Friend' } });
+    expect(host.state().view!.lobby.startBlocked).toBe('Waiting for Tom to get the pack.');
+
+    tom.answerPackOffer(true);
+    await settle(net);
+    expect(tom.state().customAddons.map((a) => a.addon.id)).toEqual(['gold-bowls']);
+    expect(players(host)).toEqual(['Hana:ready:player', 'Tom:ready:player']);
+    host.act({ kind: 'start' });
+    await settle(net);
+    expect(tom.state().view!.game?.you).toBe(1);
+    expect(tom.state().view!.lobby.addons).toEqual(['gold-bowls']);
+  });
+
+  it('refuses an addon for a game the lobby does not have, or one already there', async () => {
+    const { host } = await setup();
+    expect(host.addAddon(await goldBowls('chess'))).toEqual(['Gold Bowls is an addon for the game "chess", which this lobby does not have.']);
+    expect(host.addAddon(await goldBowls())).toEqual([]);
+    // The same zip again is no news. A different zip with the same addon id is refused.
+    expect(host.addAddon(await goldBowls())).toEqual([]);
+    expect(host.addAddon(await goldBowls('power-hungry-pets', 'Changed.'))).toEqual(['Power Hungry Pets already has an addon with the id "gold-bowls".']);
+  });
+
+  it('offers a custom game and its addon together, asks once, and sends them one after the other', async () => {
+    const { net, host, join, lp } = await setup();
+    const tom = join('Tom');
+    host.addPack(lp);
+    const addon = await goldBowls('house-pets');
+    expect(host.addAddon(addon)).toEqual([]);
+    host.act({ kind: 'selectPack', packId: lp.key });
+    host.act({ kind: 'toggleAddon', addonId: 'gold-bowls', on: true });
+    await settle(net);
+    expect(tom.state().packOffers.map((o) => `${o.offer.kind}:${o.status}`)).toEqual(['game:asking', 'addon:asking']);
+
+    tom.answerPackOffer(true);
+    await settle(net);
+    expect(tom.state().packOffers.map((o) => o.status)).toEqual(['ready', 'ready']);
+    expect(tom.state().customPack?.pack.name).toBe('House Pets');
+    expect(tom.state().customAddons.map((a) => a.addon.id)).toEqual(['gold-bowls']);
+    expect(players(host)).toEqual(['Hana:ready:player', 'Tom:ready:player']);
+  });
+
+  it('can be taken away in the lobby, but not from a running game', async () => {
+    const { net, host, join } = await setup();
+    const tom = join('Tom', memoryLoader());
+    const addon = await goldBowls();
+    host.addAddon(addon);
+    host.act({ kind: 'toggleAddon', addonId: 'gold-bowls', on: true });
+    await settle(net);
+    expect(host.removeAddon(addon.key)).toBe(true);
+    expect(host.state().view!.lobby.addons).toEqual([]);
+    expect(host.availablePacks()[0]!.addons.map((a) => a.id)).not.toContain('gold-bowls');
+
+    host.addAddon(addon);
+    host.act({ kind: 'toggleAddon', addonId: 'gold-bowls', on: true });
+    await settle(net);
+    tom.answerPackOffer(true);
+    await settle(net);
+    host.act({ kind: 'start' });
+    expect(host.state().view!.game).not.toBeNull();
+    expect(host.removeAddon(addon.key)).toBe(false);
   });
 });

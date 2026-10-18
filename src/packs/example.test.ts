@@ -1,51 +1,79 @@
 /**
- * The example custom pack in examples/packs/power-hungry-pets-wild: it loads through the same zip
- * import a host uses, every addon combination is valid, and its copy of Power Hungry Pets
- * matches the built-in pack.
+ * The example addons in examples/addons, each its own zip for Power Hungry Pets: they load
+ * through the same import a host uses, fit the built-in game alone, together and with Big
+ * Litter, and their images resolve through the addon they came with.
  */
 import { describe, expect, it } from 'vitest';
-import { importPackZip } from './custom';
+import petsJson from '../../public/packs/power-hungry-pets/pack.json';
+import bigLitterJson from '../../public/packs/power-hungry-pets/addons/big-litter.json';
+import { importZip, uploadProblems, withUploads } from './custom';
+import type { Addon, LoadedAddon, LoadedPack, Pack } from './types';
 import { validateSelection } from './validate';
 import { writeZip } from './zip';
 
-const files = (glob: Record<string, string>, prefix: string) =>
+const folder = (glob: Record<string, string>, prefix: string) =>
   Object.fromEntries(Object.entries(glob).map(([path, text]) => [path.replace(prefix, ''), text]));
 
-const WILD = files(
-  import.meta.glob('../../examples/packs/power-hungry-pets-wild/**/*', { query: '?raw', import: 'default', eager: true }) as Record<string, string>,
-  '../../examples/packs/power-hungry-pets-wild/',
+const OFF_THE_SCALE = folder(
+  import.meta.glob('../../examples/addons/off-the-scale/**/*', { query: '?raw', import: 'default', eager: true }) as Record<string, string>,
+  '../../examples/addons/off-the-scale/',
 );
-const PETS = files(
-  import.meta.glob('../../public/packs/power-hungry-pets/**/*', { query: '?raw', import: 'default', eager: true }) as Record<string, string>,
-  '../../public/packs/power-hungry-pets/',
+const SECOND_LITTER = folder(
+  import.meta.glob('../../examples/addons/second-litter/**/*', { query: '?raw', import: 'default', eager: true }) as Record<string, string>,
+  '../../examples/addons/second-litter/',
 );
 
 const url = (blob: Blob) => `blob:test/${blob.size}`;
+const pets: LoadedPack = {
+  key: 'power-hungry-pets',
+  pack: petsJson as unknown as Pack,
+  addons: [bigLitterJson as unknown as Addon],
+  asset: (p) => `/packs/power-hungry-pets/${p}`,
+};
 
-describe('example pack: Power Hungry Pets, Wild Cards', () => {
-  it('imports from a zip with its three addons', async () => {
-    const lp = await importPackZip(await writeZip(WILD), { url });
-    expect(lp.pack.name).toBe('Power Hungry Pets: Wild Cards');
-    expect(lp.addons.map((a) => a.id)).toEqual(['big-litter', 'off-the-scale', 'second-litter']);
-    const images = new Set(Object.keys(WILD).filter((p) => p.endsWith('.svg')));
+async function addonZip(files: Record<string, string>): Promise<LoadedAddon> {
+  const item = await importZip(await writeZip(files), { url });
+  if (item.kind !== 'addon') throw new Error('expected an addon zip');
+  return item.addon;
+}
+
+describe('example addons', () => {
+  it('are addon zips for Power Hungry Pets, with their images moved under their own folder', async () => {
+    const scale = await addonZip(OFF_THE_SCALE);
+    expect(scale.gameId).toBe('power-hungry-pets');
+    expect(scale.custom.offer).toMatchObject({ kind: 'addon', extends: 'power-hungry-pets', name: 'Off the Scale' });
+    const bat = scale.addon.cards!.add!.find((c) => c.id === 'backflip-bat')!;
+    expect(bat.image).toBe(`${scale.prefix}art/backflip-bat.svg`);
+    const lp = withUploads(pets, [scale]);
+    expect(lp.asset(bat.image!)).toMatch(/^blob:test\//);
+    expect(lp.asset('art/king-cat.svg')).toBe('/packs/power-hungry-pets/art/king-cat.svg');
+  });
+
+  it('fit the built-in game alone, together and with Big Litter', async () => {
+    const scale = await addonZip(OFF_THE_SCALE);
+    const litter = await addonZip(SECOND_LITTER);
+    expect(uploadProblems(pets, scale, [])).toEqual([]);
+    expect(uploadProblems(pets, litter, [scale])).toEqual([]);
+    const lp = withUploads(pets, [scale, litter]);
     for (const enabled of [['off-the-scale'], ['second-litter'], ['off-the-scale', 'second-litter'], ['big-litter', 'off-the-scale', 'second-litter']]) {
-      expect(validateSelection(lp, enabled, images)).toEqual([]);
+      expect(validateSelection(lp, enabled)).toEqual([]);
     }
   });
 
-  it('has no files it does not use', () => {
-    const text = Object.entries(WILD).filter(([p]) => p.endsWith('.json')).map(([, t]) => t).join('\n');
-    const unused = Object.keys(WILD).filter((p) => p.endsWith('.svg') && !text.includes(`"${p}"`));
-    expect(unused).toEqual([]);
+  it('name their zip when they do not fit', async () => {
+    const broken = { ...SECOND_LITTER, 'addon.json': SECOND_LITTER['addon.json']!.replace('"op": "passHands"', '"op": "passhands"') };
+    expect((await addonZip(broken)).addon.id).toBe('second-litter');
+    expect(uploadProblems(pets, await addonZip(broken), [])).toEqual([
+      'Second Litter/addon.json: cards.penguin-parade.onPlay[1]: unknown op "passhands"',
+    ]);
+    const twice = await addonZip(OFF_THE_SCALE);
+    expect(uploadProblems(pets, twice, [await addonZip(OFF_THE_SCALE)])).toEqual(['Power Hungry Pets already has an addon with the id "off-the-scale".']);
   });
 
-  it('keeps its copy of Power Hungry Pets in step with the built-in pack', () => {
-    const wild = JSON.parse(WILD['pack.json']!);
-    const pets = JSON.parse(PETS['pack.json']!);
-    const own = ['id', 'name', 'description', 'addons'];
-    for (const key of Object.keys(pets)) if (!own.includes(key) && key !== 'art') expect(wild[key], key).toEqual(pets[key]);
-    expect({ ...wild.art, cover: pets.art.cover }).toEqual(pets.art);
-    expect(WILD['addons/big-litter.json']).toBe(PETS['addons/big-litter.json']);
-    for (const path of Object.keys(PETS)) if (path.startsWith('art/') && path !== 'art/cover.svg') expect(WILD[path], path).toBe(PETS[path]);
+  it('have no files they do not use', () => {
+    for (const files of [OFF_THE_SCALE, SECOND_LITTER]) {
+      const text = files['addon.json']!;
+      expect(Object.keys(files).filter((p) => p.endsWith('.svg') && !text.includes(`"${p}"`))).toEqual([]);
+    }
   });
 });

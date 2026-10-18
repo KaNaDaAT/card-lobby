@@ -87,9 +87,9 @@ Trystero actions. Payload types live in `src/net/protocol.ts`.
 | `say` | client to host | chat text, at most 500 characters |
 | `chat` | host to client | chat messages (history on join, then new ones) |
 | `intent` | client to host | a lobby or game intent |
-| `packOffer` | host to client | hash, name, author, bytes, image count |
+| `packOffer` | host to client | one custom file: hash, `game` or `addon` (with the game it extends), name, author, bytes, image count |
 | `packReply` | client to host | hash, accept or decline, `cached` once the pack is loaded, error if it did not check out |
-| `packData` | host to client | the zip bytes. The client checks them against the offer's hash |
+| `packData` | host to client | the zip bytes of the file the client asked for. The client checks them against that offer's hash |
 
 A client with a different protocol version gets a view that says "update your page" and
 nothing else.
@@ -212,19 +212,31 @@ goes to all, "Tom holds the Battle Bunny" goes to Mia only.
 
 ## Custom packs
 
-1. The host picks a `.zip` (pack.json, addons, images) in the lobby's gallery. `pack.json` sits
-   at the root of the zip or inside one top folder.
-2. The host validates it (zip limits, file types, the pack, each addon with what it requires),
-   computes its SHA-256, and caches it in IndexedDB. Cached packs show up in that browser's
-   gallery next time. Each `?as=` slot has its own cache, like a separate device.
-3. The host sends `packOffer` to each player, and again whenever one reconnects, since a fresh
-   page has nothing loaded. Players who have that hash cached load it and reply `cached`
-   without being asked.
-4. Everyone else sees a consent card: pack name, author, size, image count, and "Only accept
-   packs from people you trust. A pack can contain any images and text."
-5. Accept: the host sends `packData`, one transfer at a time and at most three times per player.
-   The client checks the size against the offer, the SHA-256, unzips and validates, caches, and
-   replies `cached`. Progress comes from Trystero's receive progress. Start waits until every
+A zip is one of two things:
+
+- **A game**: `pack.json` (with its own addons, if any) and images. It joins the gallery.
+- **An addon** for a game the lobby has: `addon.json` with `extends` (the game's pack id) and
+  its images. It joins that game's addons, after the game's own, in upload order. Its image
+  paths are moved under `uploads/<hash>/`, so they cannot clash with the game's files.
+
+1. The host picks a `.zip` in the lobby's gallery. `pack.json` or `addon.json` sits at the root
+   of the zip or inside one top folder.
+2. The host validates it (zip limits, file types, the pack and each addon with what it
+   requires; for an addon zip, how it fits its game), computes its SHA-256, and caches it in
+   IndexedDB. Cached games and addons come back in that browser next time. Each `?as=` slot has
+   its own cache, like a separate device. An uploaded game is picked, an uploaded addon is
+   turned on.
+3. The lobby lists the custom files it uses: the game if it was uploaded, then each uploaded
+   addon that is on. The host sends a `packOffer` for each to every player, and again whenever
+   one reconnects or an uploaded addon is turned on. Players who have a hash cached load it
+   and reply `cached` without being asked.
+4. Everyone else sees one consent card for all of them: each file's name, author, size, image
+   count, and "Only accept packs from people you trust. A pack can contain any images and
+   text."
+5. Accept: the client asks for the files one at a time; the host sends each as `packData`, at
+   most three times per file and player. The client checks the size against the offer, the
+   SHA-256, unzips and validates, caches, and replies `cached`. Progress comes from Trystero's
+   receive progress. A player is ready when they have every file. Start waits until every
    seated player is ready.
 6. Decline: that player watches this game. The consent card stays, so they can change their
    mind, also during the game.
@@ -237,7 +249,7 @@ Safety rules:
   other file type rejects the pack. An entry that inflates past its declared size is stopped
   while inflating.
 - Every action has a size cap. `packData` is only taken from the host, only while this page
-  is downloading, and no bigger than offered. Trystero's `onReceive` declines anything else
+  is downloading a file it asked for, and no bigger than that file's offer. Trystero's `onReceive` declines anything else
   before the transfer starts.
 - Images are shown only via `<img src="blob:...">`. An SVG loaded that way cannot run scripts.
 - All pack text is set as text, never parsed as HTML.

@@ -10,7 +10,7 @@ Exploding Kittens.
 **Status:** playable and deployable (milestones 1 to 7). Create a lobby, invite friends, chat,
 and play full games of Power Hungry Pets or Exploding Kittens (combos and a timed Nope window
 included), with rematches, reconnects and host reloads mid-game. Hosts can upload their own
-packs as a .zip, and players accept them before they download. Each player can switch the
+packs or addons as a .zip, and players accept them before they download. Each player can switch the
 table between the classic layout and a round table. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Run it
@@ -56,11 +56,14 @@ Copy `public/packs/power-hungry-pets` (or `exploding-kittens` for a draw-and-rea
 change `pack.json` and the art, zip the folder, and pick the zip with the Custom pack tile in
 the lobby. The lobby lists any problems with their file and path. [docs/PACK_FORMAT.md](docs/PACK_FORMAT.md) describes every field and op.
 
-`npm run zip-pack -- <folder>` zips a pack folder the way the lobby expects. To try it, zip the
-example in `examples/packs/power-hungry-pets-wild`: Power Hungry Pets with two house addons,
-Off the Scale (a -1 that turns the round upside down and an ∞ that calls last call) and
-Second Litter (a new pet for each number from 1 to 8). Its rules are in
-[docs/rules/power-hungry-pets-wild.md](docs/rules/power-hungry-pets-wild.md).
+A zip can also be just an addon for a game the lobby has: an `addon.json` that names the game
+in `extends`, plus its images. It joins that game's addons.
+
+`npm run zip-pack -- <folder>` zips a game or addon folder the way the lobby expects. To try
+it, zip the two example addons for Power Hungry Pets in `examples/addons`: Off the Scale (a -1
+that turns the round upside down and an ∞ that calls last call) and Second Litter (a new pet
+for each number from 1 to 8). Their rules are in
+[docs/rules/power-hungry-pets-addons.md](docs/rules/power-hungry-pets-addons.md).
 
 ## Docs
 
