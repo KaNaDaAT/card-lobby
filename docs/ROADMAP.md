@@ -151,3 +151,5 @@ Noted after the first games with friends. Not started yet.
   you choose where it goes back. Check what goes wrong.
 - [ ] **Card counts in the lobby**: let the host set how many copies of each card go into the
   deck.
+- [ ] **Pack icons on cards**: a game or addon can have an icon, shown in a corner of each of
+  its cards, so players see which pack or addon a card comes from (like a set symbol).
