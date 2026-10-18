@@ -135,3 +135,19 @@ someone wants them.
   `except` for choosing players.
 - [x] Optional round-table view: players seated around a table in turn order, an arrow and a
   glow on whoever has to act, players in a tab beside the log. Classic stays the default.
+
+## Playtest feedback (to do)
+
+Noted after the first games with friends. Not started yet.
+
+- [ ] **Sounds**: for your turn, a card played, a reaction, the end of a round. With a mute
+  switch.
+- [ ] **Clearer visuals**: a shuffle animation, a stronger signal for whose turn it is, and
+  clearer signals in general when something happens.
+- [ ] **Layout that uses the page**: always use the available space, above all on desktop.
+- [ ] **Chat**: a way to clear it, and a timeout for chat (for example a cooldown between
+  messages).
+- [ ] **Mouse Trapper (2) is buggy**: it should show clearly which card you looked at while
+  you choose where it goes back. Check what goes wrong.
+- [ ] **Card counts in the lobby**: let the host set how many copies of each card go into the
+  deck.
