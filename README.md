@@ -10,8 +10,8 @@ Exploding Kittens.
 **Status:** playable and deployable (milestones 1 to 7). Create a lobby, invite friends, chat,
 and play full games of Power Hungry Pets or Exploding Kittens (combos and a timed Nope window
 included), with rematches, reconnects and host reloads mid-game. Hosts can upload their own
-packs as a .zip, and players accept them before they download. See
-[docs/ROADMAP.md](docs/ROADMAP.md).
+packs as a .zip, and players accept them before they download. Each player can switch the
+table between the classic layout and a round table. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Run it
 

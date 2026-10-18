@@ -199,7 +199,7 @@ export function knockOut(rt: Rt, seat: Seat, how: 'out' | 'kicked' = 'out'): voi
   const hand = handOf(rt, seat);
   const cards = [...hand.cards];
   for (const uid of cards) moveCard(rt, uid, hand, playedOf(rt, seat), 'bottom', true);
-  if (cards.length) log(rt, `${player.name}'s card was ${cards.map((uid) => cardName(rt, uid)).join(' and ')}.`);
+  if (cards.length) log(rt, `${player.name}'s ${cards.length === 1 ? 'card was' : 'cards were'} ${cards.map((uid) => cardName(rt, uid)).join(' and ')}.`);
 }
 
 export function showdown(rt: Rt): void {

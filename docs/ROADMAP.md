@@ -128,4 +128,5 @@ someone wants them.
 - [x] Format additions they needed: `valueLabel`, round `flags` with the `flag` op and
   condition, `showdown.lowestWins`, a showdown called early from a card, `passHands`, and
   `except` for choosing players.
-- [ ] Optional round-table view: players seated around a table, the turn plain to see.
+- [x] Optional round-table view: players seated around a table in turn order, an arrow and a
+  glow on whoever has to act, players in a tab beside the log. Classic stays the default.

@@ -17,7 +17,7 @@ import { h, replace, type Child } from '../dom';
 import { roomLink, type Screen } from '../router';
 import { packConsent } from '../components/packs';
 import { lobbyMain, playersPanel, resolvePack, type RoomCtx } from './lobby';
-import { logPanel, newTableMemo, tableMain, type TableMemo } from './table';
+import { logPanel, newTableMemo, tableLayout, tableMain, type TableMemo } from './table';
 
 const DEFAULT_ACCENT = '#9d85ff';
 
@@ -44,6 +44,8 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
   let drawer: 'side' | 'chat' | null = null;
   let sideLabel = 'Players';
   let unread = 0;
+  // The round table keeps the players list in a tab beside the log, out of the way.
+  let sideTab: 'log' | 'players' = 'log';
 
   const banner = h('div', { class: 'banner-slot' });
   const mainRegion = h('section', { class: 'col-main' });
@@ -191,12 +193,21 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
     if (view.game && view.lobby.phase === 'playing') {
       // Someone who joined a custom game late needs the pack before they can watch.
       const table = view.lobby.customPack && !resolvePack(c, view.lobby) ? [packConsent(c, view.lobby)] : tableMain(c, view.lobby, view.game, memo);
-      replace(mainRegion, table, playersPanel(c, view.lobby, view.game));
+      const players = playersPanel(c, view.lobby, view.game);
       const log = logPanel(view.game);
-      replace(sideRegion, log);
+      if (tableLayout() === 'round') {
+        const tab = (id: typeof sideTab, label: string) =>
+          h('button', { type: 'button', class: `seg${sideTab === id ? ' is-on' : ''}`, 'aria-pressed': String(sideTab === id), onclick: () => ((sideTab = id), draw()) }, label);
+        replace(mainRegion, table);
+        replace(sideRegion, h('div', { class: 'side-tabs layout-toggle', role: 'group', 'aria-label': 'Side panel' }, tab('log', 'Log'), tab('players', 'Players')), sideTab === 'log' ? log : players);
+        sideLabel = 'Log and players';
+      } else {
+        replace(mainRegion, table, players);
+        replace(sideRegion, log);
+        sideLabel = 'Log';
+      }
       const lines = log.querySelector('.log');
       if (lines) lines.scrollTop = lines.scrollHeight;
-      sideLabel = 'Log';
     } else {
       memo = newTableMemo();
       replace(mainRegion, lobbyMain(c, view.lobby));

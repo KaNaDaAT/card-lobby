@@ -1,7 +1,9 @@
 /**
- * The game table, drawn from the latest game view: opponents along the top, shared zones in
- * the middle, your cards at the bottom, a prompt bar when the game asks you something, and
- * round and game results. Clients never run rules, they only draw views and answer prompts.
+ * The game table, drawn from the latest game view, in one of two layouts. Classic: opponents
+ * along the top, shared zones in the middle, your cards at the bottom. Round table: everyone
+ * seated around an oval in turn order, an arrow at whoever has to act, the draw pile in the
+ * middle. Both show a prompt bar when the game asks you something, and round and game results.
+ * Clients never run rules, they only draw views and answer prompts.
  */
 import { findCombo } from '../../engine/ops/flow';
 import { showdownScore } from '../../engine/round';
@@ -25,9 +27,37 @@ export interface TableMemo {
   picked: string[];
   /** The reaction window this page already reacted to, so a double click cannot react twice. */
   reacted: string | null;
+  /** Who the round table's arrow pointed at last, so it only flashes when that changes. */
+  focus: Seat | null;
 }
 
-export const newTableMemo = (): TableMemo => ({ seen: new Set(), answered: null, picked: [], reacted: null });
+export const newTableMemo = (): TableMemo => ({ seen: new Set(), answered: null, picked: [], reacted: null, focus: null });
+
+export type TableLayout = 'classic' | 'round';
+const LAYOUT_KEY = 'cardlobby.tableLayout';
+let layout: TableLayout | null = null;
+
+/** The layout this browser picked last. Classic unless the player switched. */
+export function tableLayout(): TableLayout {
+  if (!layout) {
+    try {
+      layout = localStorage.getItem(LAYOUT_KEY) === 'round' ? 'round' : 'classic';
+    } catch {
+      layout = 'classic';
+    }
+  }
+  return layout;
+}
+
+function setTableLayout(t: T, next: TableLayout): void {
+  layout = next;
+  try {
+    localStorage.setItem(LAYOUT_KEY, next);
+  } catch {
+    // Private windows may refuse. The choice still holds until the page reloads.
+  }
+  t.ctx.redraw();
+}
 
 interface T {
   ctx: RoomCtx;
@@ -71,17 +101,30 @@ export function tableMain(ctx: RoomCtx, lobby: LobbyView, game: GameView, memo: 
   };
   if (game.prompt?.id !== memo.answered) memo.picked = memo.picked.filter((uid) => game.hand.some((c) => c.uid === uid));
 
-  const content = h(
-    'section',
-    { class: 'panel table' },
-    statusBar(t),
-    windowBanner(t),
-    result(t),
-    h('div', { class: 'seats' }, opponentOrder(t).map((p) => seat(t, p))),
-    center(t),
-    promptBar(t),
-    game.you !== null ? yourArea(t, game.players[game.you]!) : h('p', { class: 'muted small spectating' }, 'You are watching this game.'),
-  );
+  const watching = h('p', { class: 'muted small spectating' }, 'You are watching this game.');
+  const content =
+    tableLayout() === 'round'
+      ? h(
+          'section',
+          { class: 'panel table table-round' },
+          roundTop(t),
+          windowBanner(t),
+          result(t),
+          roundFelt(t),
+          promptBar(t),
+          game.you !== null ? roundHand(t, game.players[game.you]!) : watching,
+        )
+      : h(
+          'section',
+          { class: 'panel table' },
+          statusBar(t),
+          windowBanner(t),
+          result(t),
+          h('div', { class: 'seats' }, opponentOrder(t).map((p) => seat(t, p))),
+          center(t),
+          promptBar(t),
+          game.you !== null ? yourArea(t, game.players[game.you]!) : watching,
+        );
   for (const uid of t.fresh) memo.seen.add(uid);
   return [content];
 }
@@ -209,18 +252,20 @@ function zoneTitle(t: T, id: string): string {
   return short.charAt(0).toUpperCase() + short.slice(1);
 }
 
-function center(t: T): HTMLElement {
+/** The shared zones. `compact` (the round table) stacks piles sooner and leaves out empty side piles. */
+function center(t: T, cls = 'center', compact = false): HTMLElement {
   const zones = Object.keys(t.pack.rules.zones)
     .map((id) => [id, t.game.zones[id]] as const)
     .filter((entry): entry is readonly [string, ZoneView] => Boolean(entry[1]));
   return h(
     'div',
-    { class: 'center' },
+    { class: cls },
     zones.map(([id, zone]) => {
       const hidden = t.pack.rules.zones[id]?.visibility === 'hidden';
       if (!hidden && zone.count === 0) return null;
+      if (compact && hidden && zone.count === 0 && id !== 'deck') return null;
       let cards: Child;
-      if (!hidden && zone.count > 4) {
+      if (!hidden && zone.count > (compact ? 2 : 4)) {
         // A long public pile (a discard pile) shows its newest card on top.
         cards = h('div', { class: 'zone-stack' }, face(t, zone.known.at(-1)!.card, { size: 'md' }), h('span', { class: 'zone-count' }, zone.count));
       } else if (!hidden) {
@@ -245,13 +290,13 @@ function center(t: T): HTMLElement {
   );
 }
 
-function yourArea(t: T, me: PlayerView): HTMLElement {
+/** Your hand: cards to click when you are asked to play, cards to read otherwise. */
+function yourHand(t: T): HTMLElement[] {
   const p = t.prompt;
   const playing = p?.kind === 'play';
   const multi = playing && p.max > 1;
-  const choosable = p?.kind === 'choosePlayer' && p.choices.includes(me.seat);
   const size = t.game.hand.length > 5 ? 'md' : 'lg';
-  const hand = t.game.hand.map((card) => {
+  return t.game.hand.map((card) => {
     if (!playing) return face(t, card, { size });
     const picked = t.memo.picked.includes(card.uid);
     return face(t, card, {
@@ -260,6 +305,12 @@ function yourArea(t: T, me: PlayerView): HTMLElement {
       onClick: () => (multi ? togglePick(t, card.uid) : void playCard(t, card)),
     });
   });
+}
+
+function yourArea(t: T, me: PlayerView): HTMLElement {
+  const p = t.prompt;
+  const choosable = p?.kind === 'choosePlayer' && p.choices.includes(me.seat);
+  const hand = yourHand(t);
   const isTurn = t.game.phase === 'round' && t.game.turnSeat === me.seat;
   return h(
     'div',
@@ -455,54 +506,193 @@ function promptBar(t: T): HTMLElement | null {
   return h('div', { class: 'prompt-bar', role: 'group', 'aria-label': title }, h('p', { class: 'prompt-title' }, title), body);
 }
 
-function statusBar(t: T): HTMLElement {
+/** Whose move it is, in words. The host gets a button to take out a player who is away. */
+function turnStatus(t: T): HTMLElement | null {
   const g = t.game;
-  const info = g.deciding ? `Deciding round` : `Round ${g.round}`;
-  let status: Child = null;
-  if (g.phase === 'round' && g.waiting) {
-    const w = g.waiting;
-    const player = g.players[w.seat]!;
-    if (w.seat === g.you) {
-      status = h('span', { class: 'turn-banner is-you' }, t.prompt ? 'Your move' : 'Sending...');
-    } else {
-      status = h(
-        'span',
-        { class: 'turn-banner' },
-        player.connected ? `Waiting for ${player.name} ${WAITING_FOR[w.kind]}.` : `${player.name} is away. Waiting for them ${WAITING_FOR[w.kind]}.`,
-        !player.connected && t.ctx.session.isHost
-          ? h(
-              'button',
-              { type: 'button', class: 'btn btn-sm', onclick: () => t.ctx.session.act({ kind: 'kickForRound', playerId: player.playerId }) },
-              `Take ${player.name} out of this round`,
-            )
-          : null,
-      );
-    }
-  }
-  // The latest event, so nobody has to read the log to follow along.
-  const last = g.phase === 'round' ? g.log.at(-1) : undefined;
+  if (g.phase !== 'round' || !g.waiting) return null;
+  const w = g.waiting;
+  const player = g.players[w.seat]!;
+  if (w.seat === g.you) return h('span', { class: 'turn-banner is-you' }, t.prompt ? 'Your move' : 'Sending...');
+  return h(
+    'span',
+    { class: 'turn-banner' },
+    player.connected ? `Waiting for ${player.name} ${WAITING_FOR[w.kind]}.` : `${player.name} is away. Waiting for them ${WAITING_FOR[w.kind]}.`,
+    kickButton(t, player),
+  );
+}
+
+function kickButton(t: T, player: PlayerView): HTMLElement | null {
+  if (player.connected || !t.ctx.session.isHost) return null;
+  return h(
+    'button',
+    { type: 'button', class: 'btn btn-sm', onclick: () => t.ctx.session.act({ kind: 'kickForRound', playerId: player.playerId }) },
+    `Take ${player.name} out of this round`,
+  );
+}
+
+/** Round flags change the rules for everyone, so they stay in sight. */
+function flagsRow(t: T): HTMLElement | null {
+  const g = t.game;
+  if (g.phase !== 'round' || !g.flags.length) return null;
   return h(
     'div',
-    { class: 'table-status' },
+    { class: 'table-flags' },
+    g.flags.map((id) => {
+      const f = t.pack.rules.flags?.[id];
+      return h('p', { class: 'table-flag' }, h('strong', null, f?.label ?? id), f?.text ? h('span', null, f.text) : null);
+    }),
+  );
+}
+
+/** The latest event, so nobody has to read the log to follow along. */
+function ticker(t: T, cls: string): HTMLElement | null {
+  const last = t.game.phase === 'round' ? t.game.log.at(-1) : undefined;
+  return last ? h('p', { class: `${cls}${last.private ? ' is-private' : ''}`, 'aria-hidden': 'true' }, last.text) : null;
+}
+
+function roundInfo(t: T): HTMLElement {
+  const g = t.game;
+  return h(
+    'div',
+    { class: 'table-info' },
+    h('strong', null, g.deciding ? 'Deciding round' : `Round ${g.round}`),
+    h('span', { class: 'muted' }, g.tokensToWin === 1 ? 'One round decides the game' : `First to ${g.tokensToWin} tokens wins`),
+  );
+}
+
+function layoutToggle(t: T): HTMLElement {
+  const current = tableLayout();
+  const option = (value: TableLayout, label: string) =>
+    h('button', { type: 'button', class: `seg${current === value ? ' is-on' : ''}`, 'aria-pressed': String(current === value), onclick: () => setTableLayout(t, value) }, label);
+  return h('div', { class: 'layout-toggle', role: 'group', 'aria-label': 'Table layout' }, option('classic', 'Classic'), option('round', 'Round table'));
+}
+
+function statusBar(t: T): HTMLElement {
+  return h('div', { class: 'table-status' }, roundInfo(t), turnStatus(t), layoutToggle(t), flagsRow(t), ticker(t, 'ticker'));
+}
+
+// ---------- Round table ----------
+
+function roundTop(t: T): HTMLElement {
+  return h('div', { class: 'rt-top' }, roundInfo(t), layoutToggle(t));
+}
+
+/** Seats around the oval in turn order, clockwise, you at the bottom. Angles in degrees, 90 is the bottom. */
+function seating(t: T): { p: PlayerView; angle: number }[] {
+  const players = t.game.players;
+  const you = t.game.you;
+  if (you === null) return players.map((p, i) => ({ p, angle: 90 + (360 * i) / players.length }));
+  const others = opponentOrder(t);
+  return [{ p: players[you]!, angle: 90 }, ...others.map((p, i) => ({ p, angle: 90 + (360 * (i + 1)) / (others.length + 1) }))];
+}
+
+/** A point on the oval, `k` = 1 being its rim, as CSS percentages. */
+function onOval(angle: number, k: number): { x: number; y: number } {
+  const rad = (angle * Math.PI) / 180;
+  return { x: 50 + 50 * k * Math.cos(rad), y: 50 + 50 * k * Math.sin(rad) };
+}
+
+function roundFelt(t: T): HTMLElement {
+  const g = t.game;
+  const seats = seating(t);
+  // Whoever the game waits on, or whose turn it is while a reaction window runs.
+  const focus = g.phase === 'round' ? (g.waiting?.seat ?? g.turnSeat) : null;
+  const target = seats.find((s) => s.p.seat === focus);
+  const flash = focus !== t.memo.focus;
+  t.memo.focus = focus;
+
+  const many = seats.length > 6;
+  let arrow: HTMLElement | null = null;
+  let spot = '';
+  if (target) {
+    const rim = onOval(target.angle, 1);
+    // The felt keeps a 16:10 shape, so the direction to the seat on screen follows from that.
+    const rad = (target.angle * Math.PI) / 180;
+    const dx = 16 * Math.cos(rad);
+    const dy = 10 * Math.sin(rad);
+    const len = Math.hypot(dx, dy);
+    const [ux, uy] = [dx / len, dy / len];
+    // Just inside the seat's edge: seats are about 150 x 150 px (120 wide when crowded), centered on the rim.
+    const gap = 12 + Math.abs(ux) * (many ? 60 : 76) + Math.abs(uy) * 74 + 14;
+    const turn = (Math.atan2(uy, ux) * 180) / Math.PI;
+    arrow = h('div', {
+      class: `rt-arrow${flash ? ' is-new' : ''}`,
+      style: `left: calc(${rim.x.toFixed(2)}% - ${(ux * gap).toFixed(1)}px); top: calc(${rim.y.toFixed(2)}% - ${(uy * gap).toFixed(1)}px); --turn: ${turn.toFixed(1)}deg`,
+      'aria-hidden': 'true',
+    });
+    spot = `--spot-x: ${rim.x.toFixed(2)}%; --spot-y: ${rim.y.toFixed(2)}%`;
+  }
+  return h(
+    'div',
+    { class: `rt-stage${many ? ' rt-many' : ''}` },
     h(
       'div',
-      { class: 'table-info' },
-      h('strong', null, info),
-      h('span', { class: 'muted' }, g.tokensToWin === 1 ? 'One round decides the game' : `First to ${g.tokensToWin} tokens wins`),
+      { class: 'rt-felt', style: spot || null },
+      arrow,
+      h('div', { class: 'rt-center' }, turnLabel(t), center(t, 'rt-zones', true), flagsRow(t), ticker(t, 'rt-ticker')),
+      seats.map(({ p, angle }) => roundSeat(t, p, angle, p.seat === focus)),
     ),
-    status,
-    // Round flags change the rules for everyone, so they stay in sight.
-    g.phase === 'round' && g.flags.length
-      ? h(
-          'div',
-          { class: 'table-flags' },
-          g.flags.map((id) => {
-            const f = t.pack.rules.flags?.[id];
-            return h('p', { class: 'table-flag' }, h('strong', null, f?.label ?? id), f?.text ? h('span', null, f.text) : null);
-          }),
-        )
-      : null,
-    last ? h('p', { class: `ticker${last.private ? ' is-private' : ''}`, 'aria-hidden': 'true' }, last.text) : null,
+  );
+}
+
+/** The big line in the middle of the table: whose move it is. */
+function turnLabel(t: T): HTMLElement | null {
+  const g = t.game;
+  if (g.phase !== 'round') return h('p', { class: 'rt-turn' }, g.phase === 'gameOver' ? 'Game over' : 'Round over');
+  const w = g.waiting;
+  if (!w) {
+    if (g.window) return h('p', { class: 'rt-turn' }, 'Anyone can react');
+    return h('p', { class: 'rt-turn' }, g.turnSeat === g.you ? 'Your turn' : `${name(t, g.turnSeat)}'s turn`);
+  }
+  const player = g.players[w.seat]!;
+  if (w.seat === g.you) {
+    const text = !t.prompt ? 'Sending...' : w.kind === 'play' ? 'Your turn' : 'Your move';
+    return h('p', { class: 'rt-turn is-you' }, text);
+  }
+  if (!player.connected) return h('div', { class: 'rt-turn-away' }, h('p', { class: 'rt-turn' }, `${player.name} is away`), kickButton(t, player));
+  const text = w.kind === 'play' && w.seat === g.turnSeat ? `${player.name}'s turn` : `${player.name} is about ${WAITING_FOR[w.kind]}`;
+  return h('p', { class: 'rt-turn' }, text);
+}
+
+function roundSeat(t: T, p: PlayerView, angle: number, focused: boolean): HTMLElement {
+  const g = t.game;
+  const isMe = p.seat === g.you;
+  const isTurn = g.phase === 'round' && g.turnSeat === p.seat;
+  const choosable = t.prompt?.kind === 'choosePlayer' && t.prompt.choices.includes(p.seat);
+  const winner = g.result?.winners.includes(p.seat) && g.phase !== 'round';
+  const out = p.round !== 'in' && g.phase === 'round';
+  const cls = ['rt-seat', isMe ? 'is-me' : '', focused ? 'is-focus' : '', out ? 'is-out' : '', choosable ? 'is-choice' : '', winner ? 'is-winner' : '']
+    .filter(Boolean)
+    .join(' ');
+  const at = onOval(angle, 1);
+  const body = [
+    h('div', { class: 'rt-seat-head' }, avatar(p.name, p.color), h('span', { class: 'rt-seat-name' }, isMe ? `${p.name} (you)` : p.name)),
+    h('div', { class: 'rt-seat-meta' }, tokens(t, p), badges(t, p), isTurn ? pill('Turn', 'pill-turn') : focused ? pill('Deciding', 'pill-turn') : null),
+    h(
+      'div',
+      { class: 'rt-seat-cards' },
+      // Your own hand is below the table, big.
+      isMe ? null : h('div', { class: 'seat-hand', 'aria-label': `${p.name}'s hand` }, handCards(t, p, 'sm')),
+      p.played.length ? h('div', { class: 'rt-played', 'aria-label': `Played by ${p.name}` }, p.played.map((c) => face(t, c, { size: 'sm' }))) : null,
+    ),
+  ];
+  const style = `left: ${at.x.toFixed(2)}%; top: ${at.y.toFixed(2)}%`;
+  if (choosable) {
+    return h('button', { type: 'button', class: cls, style, 'aria-label': `Choose ${isMe ? 'yourself' : p.name}`, onclick: () => answer(t, p.seat) }, body);
+  }
+  return h('div', { class: cls, style }, body);
+}
+
+/** Your hand under the table. It lights up when the game waits on you. */
+function roundHand(t: T, me: PlayerView): HTMLElement {
+  const g = t.game;
+  const yourMove = g.phase === 'round' && g.waiting?.seat === me.seat && Boolean(t.prompt);
+  const hand = yourHand(t);
+  return h(
+    'div',
+    { class: `rt-hand${yourMove ? ' is-turn' : ''}` },
+    h('span', { class: 'zone-label' }, 'Your hand'),
+    h('div', { class: 'hand', 'aria-label': 'Your hand' }, hand.length ? hand : h('p', { class: 'muted small' }, 'No cards in hand.')),
   );
 }
 

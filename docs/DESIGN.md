@@ -250,9 +250,15 @@ Safety rules:
 1. **Home**: name and color, Create lobby, Join with code.
 2. **Lobby**: header with code and copy-link button, game gallery, selected game with addons
    and options, players, chat, Start.
-3. **Table**: opponents along the top, deck and set-aside in the middle, your hand at the
-   bottom, played cards in front of each player, a prompt bar, tokens per player, log and chat
-   in a side panel (a drawer on phones).
+3. **Table**, in two layouts each player picks for themselves (remembered per browser):
+   - **Classic**: opponents along the top, deck and set-aside in the middle, your hand at the
+     bottom, played cards in front of each player, a prompt bar, tokens per player, log and
+     chat in a side panel (a drawer on phones), players below the table.
+   - **Round table**: everyone seated around an oval in turn order, clockwise, you at the
+     bottom. The seat the game waits on glows, an arrow and a spotlight point at it, and the
+     middle says whose move it is, with the shared piles, round flags and the latest event.
+     The prompt bar and your hand sit under the table. Players move into a tab beside the
+     log. On narrow screens the seats sit in a grid instead of an oval.
 4. **Round end**: hands revealed, the winner, tokens. **Game end**: winner and rematch.
 
 ## Testing
