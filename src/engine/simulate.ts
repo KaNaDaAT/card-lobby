@@ -112,8 +112,9 @@ function checkViews(s: GameState): void {
 
 /**
  * Where a card goes back in secret must not show in anyone else's view. Tries the top, the
- * bottom and the middle as answers and compares what every other seat sees of the shared zones
- * and of the other players' hands. Their own hand may differ: they may draw the card.
+ * bottom and the middle as answers and compares what every other seat sees of the shared zones,
+ * of the other players' hands, and who it is told knows its own cards. Its own cards may differ:
+ * it may draw the card.
  */
 function checkSecretPosition(pack: Pack, s: GameState, prompt: Extract<Prompt, { kind: 'choosePosition' }>, now: number): void {
   const answers = [...new Set([0, prompt.choices - 1, Math.floor(prompt.choices / 2)])];
@@ -126,7 +127,9 @@ function checkSecretPosition(pack: Pack, s: GameState, prompt: Extract<Prompt, {
   for (const seat of others) {
     const seen = after.map((state) => {
       const view = viewFor(state, seat);
-      return JSON.stringify({ zones: view.zones, hands: view.players.filter((p) => p.seat !== seat).map((p) => p.hand) });
+      // Their own cards may differ, but not whether the mover is shown to know them.
+      const mine = view.hand.map((c) => c.seenBy.includes(prompt.to));
+      return JSON.stringify({ zones: view.zones, hands: view.players.filter((p) => p.seat !== seat).map((p) => p.hand), mine });
     });
     if (seen.some((v) => v !== seen[0])) throw new Error(`seat ${seat} can tell where ${s.players[prompt.to]!.name} put a card`);
   }

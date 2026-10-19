@@ -203,6 +203,9 @@ start of the owner's turn.
   where it went. A random or chosen card taken from a hand (Pair, Favor) does the same for
   that hand. The simulation tries several answers to every position question and checks that
   nobody else's view changes.
+- Your own hand shows an eye on each card another player knows, naming them. Knowledge nobody
+  saw happen is left out (`quiet` on the card): after a secret put-back, which cards in that
+  pile the mover still knows, since telling the next holder would tell where the card went.
 - Shuffling a zone clears `knownBy` for its cards and gives them new uids, so nobody can track
   a card through a shuffle by its id.
 - The simulation test checks that no view ever contains a hidden card its seat does not know.

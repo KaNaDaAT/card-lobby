@@ -230,6 +230,8 @@ export function know(rt: Rt, uid: string, seats: readonly Seat[]): void {
   const card = cardOf(rt, uid);
   for (const seat of seats) if (!card.knownBy.includes(seat)) card.knownBy.push(seat);
   card.knownBy.sort((a, b) => a - b);
+  // Learning it in the open makes it known that they know.
+  if (card.quiet) card.quiet = card.quiet.filter((seat) => !seats.includes(seat));
 }
 
 /**
@@ -241,7 +243,14 @@ export function forget(rt: Rt, zone: Zone, keep: readonly Seat[]): void {
   for (const uid of zone.cards) {
     const card = cardOf(rt, uid);
     card.knownBy = card.knownBy.filter((seat) => keep.includes(seat));
+    if (card.quiet) card.quiet = card.quiet.filter((seat) => keep.includes(seat));
   }
+}
+
+/** Marks a seat's knowing a card as something nobody else saw. Does nothing if the seat does not know it. */
+export function hush(rt: Rt, uid: string, seat: Seat): void {
+  const card = cardOf(rt, uid);
+  if (card.knownBy.includes(seat) && !card.quiet?.includes(seat)) card.quiet = [...(card.quiet ?? []), seat];
 }
 
 /**

@@ -361,10 +361,12 @@ function yourHand(t: T, size: CardOpts['size'] = t.game.hand.length > 5 ? 'md' :
   const playing = p?.kind === 'play';
   const multi = playing && p.max > 1;
   return t.game.hand.map((card) => {
-    if (!playing) return face(t, card, { size });
+    const seenBy = card.seenBy.map((seat) => name(t, seat));
+    if (!playing) return face(t, card, { size, seenBy });
     const picked = t.memo.picked.includes(card.uid);
     return face(t, card, {
       size,
+      seenBy,
       active: multi ? picked : true,
       onClick: () => (multi ? togglePick(t, card.uid) : openHandCard(t, card)),
     });

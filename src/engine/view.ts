@@ -15,6 +15,12 @@ export function knows(s: GameState, seat: Seat | null, card: CardInstance, zone:
   return card.knownBy.includes(seat);
 }
 
+/** Who else knows a card in your hand, leaving out knowledge nobody saw happen. */
+function seenBy(s: GameState, uid: string, you: Seat): Seat[] {
+  const card = s.cards[uid]!;
+  return card.knownBy.filter((seat) => seat !== you && !card.quiet?.includes(seat));
+}
+
 /** `now` is the host clock, for the time left in a reaction window. */
 export function viewFor(s: GameState, seat: Seat | null, now = 0): GameView {
   const you = seat !== null && s.players[seat] ? seat : null;
@@ -51,7 +57,7 @@ export function viewFor(s: GameState, seat: Seat | null, now = 0): GameView {
       hand: zoneView(s.zones[`hand:${p.seat}`]),
       played: zoneView(s.zones[`played:${p.seat}`]).known.map((k) => k.card),
     })),
-    hand: you === null ? [] : (s.zones[`hand:${you}`]?.cards ?? []).map(visible),
+    hand: you === null ? [] : (s.zones[`hand:${you}`]?.cards ?? []).map((uid) => ({ ...visible(uid), seenBy: seenBy(s, uid, you) })),
     zones,
     prompt: s.prompt && s.prompt.to === you ? structuredClone(s.prompt) : null,
     waiting: s.prompt ? { seat: s.prompt.to, kind: s.prompt.kind } : null,

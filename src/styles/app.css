@@ -873,6 +873,26 @@ select.input {
   display: none;
 }
 
+/* Others know this card in your hand. */
+.card-seen {
+  position: absolute;
+  top: 34%;
+  left: 6%;
+  display: grid;
+  place-items: center;
+  width: 26cqw;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgb(29 21 48 / 0.85);
+  color: #ffe08a;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+}
+
+.card-seen .icon {
+  width: 70%;
+  height: 70%;
+}
+
 /* Copies of each card in the lobby. The host gets a stepper. */
 .count-card {
   display: flex;

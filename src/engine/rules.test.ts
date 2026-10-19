@@ -130,6 +130,26 @@ describe('cards', () => {
     expect(t.view(a!).zones.deck!.known.map((k) => k.index)).toEqual([t.s.zones.deck!.cards.length - 1]);
   });
 
+  it('tells you who knows your card, but not a Mouse Trapper who put it back in secret', () => {
+    const t = table();
+    const [me, a] = t.order;
+    t.rig(`hand:${me}`, ['battle-bunny', 'crystal-bowl']);
+    t.rig(`hand:${a}`, ['crystal-bowl']);
+    t.play('battle-bunny');
+    t.answer(a);
+    expect(t.view(me!).hand.map((c) => c.seenBy)).toEqual([[a]]);
+
+    const put = table();
+    const [mover, next] = put.order;
+    put.rig(`hand:${mover}`, ['mouse-trapper', 'crystal-bowl']);
+    put.rig('deck', ['king-cat']);
+    put.play('mouse-trapper');
+    put.answer(0);
+    const drawn = put.view(next!).hand.find((c) => c.cardId === 'king-cat')!;
+    expect(put.s.cards[drawn.uid]!.knownBy).toContain(mover);
+    expect(drawn.seenBy).toEqual([]);
+  });
+
   it('Mouse Trapper: an empty draw pile means nothing happens', () => {
     const t = table();
     const [me] = t.order;
