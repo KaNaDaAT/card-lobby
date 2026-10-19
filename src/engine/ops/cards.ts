@@ -5,6 +5,7 @@ import {
   cardName,
   createCard,
   defOf,
+  forget,
   handOf,
   log,
   moveCard,
@@ -51,6 +52,7 @@ export const buildDeck: OpDef = {
  * so nobody can follow a card through a shuffle.
  */
 export function shuffleZone(rt: Rt, zone: Zone): void {
+  zone.shuffles = (zone.shuffles ?? 0) + 1;
   shuffleInPlace(rt.s.rng, zone.cards);
   zone.cards = zone.cards.map((old) => {
     const card = rt.s.cards[old]!;
@@ -84,6 +86,10 @@ function position(rt: Rt, at: unknown, to: Zone): 'top' | 'bottom' | number {
  * Moves cards from the top of `from`, or one given card (`card`), or the first card with a given
  * id (`match`). A `secret` move leaves only the mover knowing where the card went, even if
  * everyone saw it before (an Exploding Kitten put back into the draw pile).
+ *
+ * A move into a hidden zone at a chosen or random position is always secret, and everyone
+ * else forgets the cards in that zone: the cards below it moved down by one, so known
+ * positions would tell where it went.
  */
 export const move: OpDef = {
   status: 'ready',
@@ -94,9 +100,15 @@ export const move: OpDef = {
     if (!to) return 'abort';
     const from = resolveZones(rt, op.from);
     const faceUp = op.faceUp === true;
+    const hiddenSpot = to.visibility === 'hidden' && op.at !== undefined && op.at !== 'top' && op.at !== 'bottom';
     const one = (uid: string, source: Zone) => {
       moveCard(rt, uid, source, to, position(rt, op.at, to), faceUp);
-      if (op.secret === true) rt.s.cards[uid]!.knownBy = [selfSeat(rt)];
+      if (op.secret === true || hiddenSpot) rt.s.cards[uid]!.knownBy = [selfSeat(rt)];
+    };
+    // Nobody can follow a random position, not even the mover.
+    const done = () => {
+      if (hiddenSpot) forget(rt, to, op.at === 'random' ? [] : [selfSeat(rt)]);
+      return 'next' as const;
     };
     if (op.card !== undefined || op.match !== undefined) {
       const uid =
@@ -106,7 +118,7 @@ export const move: OpDef = {
       const source = typeof uid === 'string' ? from.find((z) => z.cards.includes(uid)) : undefined;
       if (typeof uid !== 'string' || !source) return 'abort';
       one(uid, source);
-      return 'next';
+      return done();
     }
     let moved = 0;
     for (const zone of from) {
@@ -116,7 +128,7 @@ export const move: OpDef = {
         moved++;
       }
     }
-    return moved === 0 && op.count !== 'all' ? 'abort' : 'next';
+    return moved === 0 && op.count !== 'all' ? 'abort' : done();
   },
 };
 

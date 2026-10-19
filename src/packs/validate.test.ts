@@ -101,6 +101,7 @@ describe('validatePack', () => {
       p.engine = '9.0';
       p.art.cover = 'art/cover.gif';
       p.art.back = '../secret.svg';
+      p.art.icon = 'art/icon.bmp';
       card(p, 'king-cat').image = 'https://example.com/x.png';
       (card(p, 'king-cat') as unknown as Record<string, unknown>).onplay = [];
 
@@ -112,6 +113,7 @@ describe('validatePack', () => {
         'pack.json: engine: needs engine 9.0, this app runs 0.1',
         'pack.json: art.cover: image type must be one of png, jpg, jpeg, webp, svg',
         'pack.json: art.back: must be a relative path inside the pack',
+        'pack.json: art.icon: image type must be one of png, jpg, jpeg, webp, svg',
         'pack.json: cards.king-cat.image: must be a relative path inside the pack',
         'pack.json: cards.king-cat.onplay: unknown field',
         'pack.json: cards.king-cat: duplicate card id',

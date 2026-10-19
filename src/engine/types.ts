@@ -24,6 +24,8 @@ export interface Zone {
   visibility: 'public' | 'owner' | 'hidden';
   /** Card uids, index 0 is the top. */
   cards: string[];
+  /** How often the zone was shuffled, so the table can show it. Missing until the first shuffle. */
+  shuffles?: number;
 }
 
 export type RoundStatus = 'in' | 'out' | 'sittingOut';
@@ -104,7 +106,12 @@ export type Prompt =
     })
   | (PromptBase & { kind: 'choosePlayer'; choices: Seat[] })
   | (PromptBase & { kind: 'guess'; choices: number[] })
-  | (PromptBase & { kind: 'choosePosition'; choices: number })
+  | (PromptBase & {
+      kind: 'choosePosition';
+      choices: number;
+      /** The card going into the zone, when the answering seat knows it. */
+      card?: string;
+    })
   | (PromptBase & { kind: 'confirm' })
   | (PromptBase & { kind: 'chooseCard'; choices: string[] })
   | (PromptBase & { kind: 'nameCard'; choices: string[] });
@@ -202,6 +209,8 @@ export interface VisibleCard {
 export interface ZoneView {
   count: number;
   known: { index: number; card: VisibleCard }[];
+  /** How often it was shuffled. Everyone sees a shuffle. */
+  shuffles: number;
 }
 
 export interface PlayerView {
@@ -225,6 +234,8 @@ export interface GameView {
   phase: GamePhase;
   tokensToWin: number;
   turnSeat: Seat;
+  /** Turns started this round. A new number means a new turn, also for a player who goes again. */
+  turnNumber: number;
   deciding: Seat[] | null;
   players: PlayerView[];
   /** Your own hand, empty for spectators. */

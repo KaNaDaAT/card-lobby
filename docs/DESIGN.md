@@ -43,6 +43,9 @@
   few KB), so sending the whole thing on every change is simpler than diffs.
 - Every view carries a `seq`. Clients drop views older than the one they have.
 - Chat goes through the host. The host keeps the last 500 messages and sends them on join.
+  Slow mode (2 seconds by default, the host picks 0 to 60) drops a player's message that
+  comes too soon and tells only them. The host is exempt, and can clear the chat for
+  everyone. Players can clear it on their own screen.
 - Clients never run game rules. They only draw views and answer prompts.
 
 ## Rooms, codes and encryption
@@ -100,6 +103,11 @@ nothing else.
 - Below it, the game's addons as cards with image, description and a toggle. Requirements and
   conflicts are shown and enforced. The player range updates as addons change it.
 - Options declared by the pack and its addons (tie-break, tokens to win) appear as a form.
+- The host can change how many copies of each card go into the deck (0 to 20), for cards
+  whose count is a plain number. Counts that depend on the players (one kitten less than
+  players) are rules and stay. Start is blocked while the counts break round setup for the
+  players at the table. The counts are fixed when the game starts and saved with it.
+- Each card shows the icon of the game or addon it comes from, when the pack has one.
 - Everyone sees the same lobby live. Only the host can change it.
 - Players list: color avatar, name, host and you badges, connection state, pack-ready state.
 - Start is enabled only when the player count fits and every player has the pack. Otherwise
@@ -183,6 +191,12 @@ start of the owner's turn.
   hidden.
 - Peeking adds the viewer to `knownBy`. Moving a card inside a hidden zone keeps knowledge
   (Mouse Trapper knows where it put the card).
+- A card put into a hidden zone at a chosen or random position (Mouse Trapper, a defused
+  kitten) moves the cards below it down by one. So everyone but the mover forgets every card
+  in that zone: known positions, or a known card turning up in someone's hand, would tell
+  where it went. A random or chosen card taken from a hand (Pair, Favor) does the same for
+  that hand. The simulation tries several answers to every position question and checks that
+  nobody else's view changes.
 - Shuffling a zone clears `knownBy` for its cards and gives them new uids, so nobody can track
   a card through a shuffle by its id.
 - The simulation test checks that no view ever contains a hidden card its seat does not know.
@@ -275,8 +289,18 @@ Safety rules:
      short screens. Players move into a tab beside the log. On narrow screens the seats sit
      in a grid instead of an oval.
    - In both, clicking a card in your hand opens it large with its text, with Play and Back.
-     Cards played in combos are picked instead, and one picked card shows its text.
-4. **Round end**: hands revealed, the winner, tokens. **Game end**: winner and rematch.
+     Cards played in combos are picked instead, and one picked card shows its text. The
+     question where a card goes back (Mouse Trapper, a defused kitten) shows that card.
+   - The room uses the whole window. On wide screens the cards grow with it, so the table fills
+     the screen instead of sitting in a narrow column.
+4. **Signals** (`src/ui/events.ts` compares the view a page had with the new one): a big
+   "Your turn" when your turn starts, a glow on your area while the game waits on you, a flash
+   on the seat that played a card, a red flash and shake on a player who goes out, a riffle on a
+   pile that was shuffled, and the newest log line sliding in. The tab title says "Your move".
+   Each comes with a short sound (`src/ui/sound.ts`, made with the Web Audio API, no sound
+   files), with a mute switch in the top bar that the browser remembers. Reduced motion turns
+   the animations off.
+5. **Round end**: hands revealed, the winner, tokens. **Game end**: winner and rematch.
 
 ## Testing
 

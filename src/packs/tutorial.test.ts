@@ -42,10 +42,11 @@ describe('the tutorial', () => {
     const item = await importZip(await writeZip(EXAMPLE), { url: () => 'blob:test' });
     if (item.kind !== 'addon') throw new Error('expected an addon zip');
     expect(item.addon.gameId).toBe('power-hungry-pets');
+    expect(item.addon.addon.icon).toBe(`${item.addon.prefix}art/icon.svg`);
     expect(uploadProblems(pets, item.addon, [])).toEqual([]);
     const all = [...petsAddons.map((a) => a.id), 'sleepy-ferrets'];
     expect(validateSelection(withUploads(pets, [item.addon]), all)).toEqual([]);
-    expect(Object.keys(EXAMPLE).sort()).toEqual(['addon.json', 'art/addon.svg', 'art/sleepy-ferret.svg']);
+    expect(Object.keys(EXAMPLE).sort()).toEqual(['addon.json', 'art/addon.svg', 'art/icon.svg', 'art/sleepy-ferret.svg']);
   });
 
   it('has a Sleepy Ferret that peeks at a card and then naps', () => {

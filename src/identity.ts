@@ -69,6 +69,9 @@ export function loadIdentity(): Identity {
     name: read('name') ?? `${pick(ADJECTIVES)} ${pick(ANIMALS)}`,
     color: read('color') ?? pick(PLAYER_COLORS),
   };
+  // Kept, so someone who joined by link keeps their name after a reload.
+  write('name', cached.name);
+  write('color', cached.color);
   return cached;
 }
 
@@ -96,4 +99,13 @@ export function loadRoomSnapshot(code: string): string | null {
 
 export function saveRoomSnapshot(code: string, data: string): void {
   write(`room:${code}`, data);
+}
+
+/** The last chat message this browser slot cleared from its own screen in a room. */
+export function loadChatCleared(code: string): string | null {
+  return read(`chatCleared:${code}`);
+}
+
+export function saveChatCleared(code: string, id: string): void {
+  write(`chatCleared:${code}`, id);
 }

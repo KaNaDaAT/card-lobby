@@ -4,6 +4,7 @@
   "name": "Second Litter",
   "description": "One new pet for each number from 1 to 8, with a different action of about the same strength and risk. House design, balance untested.",
   "image": "art/addon-second-litter.svg",
+  "icon": "art/icon-second-litter.svg",
   "requires": [],
   "conflicts": [],
   "cards": {

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import petsJson from '../../public/packs/power-hungry-pets/pack.json';
 import bigLitterJson from '../../public/packs/power-hungry-pets/addons/big-litter.json';
+import secondLitterJson from '../../public/packs/power-hungry-pets/addons/second-litter.json';
 import { resolveCount } from './count';
-import { addonProblems, MergeError, mergeAddons } from './merge';
+import { addonProblems, cardOrigins, MergeError, mergeAddons } from './merge';
 import type { Addon, Pack } from './types';
 
 const pets = petsJson as unknown as Pack;
@@ -28,6 +29,15 @@ describe('Power Hungry Pets data', () => {
     mergeAddons(pets, [bigLitter], ['big-litter']);
     expect(deckSize(pets, 4)).toBe(21);
     expect(pets.players.max).toBe(6);
+  });
+
+  it('knows which game or addon each card comes from, for its icon', () => {
+    const addons = [bigLitter, secondLitterJson as unknown as Addon];
+    const origins = cardOrigins(pets, addons, ['big-litter', 'second-litter']);
+    expect(origins.get('king-cat')).toEqual({ name: 'Power Hungry Pets', icon: 'art/icon.svg' });
+    expect(origins.get('crystal-bowl')).toEqual({ name: 'Power Hungry Pets', icon: 'art/icon.svg' });
+    expect(origins.get('nosy-ferret')).toEqual({ name: 'Second Litter', icon: 'art/icon-second-litter.svg' });
+    expect(cardOrigins(pets, addons, []).has('nosy-ferret')).toBe(false);
   });
 });
 

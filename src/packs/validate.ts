@@ -98,6 +98,7 @@ export function validateAddon(raw: unknown, file: string, files?: ReadonlySet<st
   if (!isStr(a.name) || !a.name.trim()) err('name', 'missing');
   if (!isStr(a.description)) err('description', 'missing');
   if (a.image !== undefined) checkImage(a.image, 'image', err, files);
+  if (a.icon !== undefined) checkImage(a.icon, 'icon', err, files);
   for (const key of ['requires', 'conflicts'] as const) {
     if (a[key] !== undefined && !(Array.isArray(a[key]) && a[key]!.every(isStr))) err(key, 'expected a list of addon ids');
   }
@@ -182,6 +183,7 @@ class PackChecker {
       checkImage(p.art.cover, 'art.cover', (a, m) => this.err(a, m), this.opts.files);
       checkImage(p.art.back, 'art.back', (a, m) => this.err(a, m), this.opts.files);
       if (p.art.accent !== undefined && !isStr(p.art.accent)) this.err('art.accent', 'expected a CSS color');
+      if (p.art.icon !== undefined) checkImage(p.art.icon, 'art.icon', (a, m) => this.err(a, m), this.opts.files);
     }
     if (p.addons !== undefined && !(Array.isArray(p.addons) && p.addons.every((a) => isStr(a) && a.endsWith('.json')))) {
       this.err('addons', 'expected a list of .json paths');

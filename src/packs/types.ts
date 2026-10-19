@@ -27,7 +27,8 @@ export interface Pack {
   /** Lowest engine version this pack needs, like "0.1". */
   engine: string;
   players: PlayerRange;
-  art: { cover: string; back: string; accent?: string };
+  /** `icon` is a small square image, shown in a corner of the game's own cards like a set symbol. */
+  art: { cover: string; back: string; accent?: string; icon?: string };
   options?: OptionDef[];
   rules: Rules;
   cards: CardDef[];
@@ -156,6 +157,8 @@ export interface Addon {
   extends?: string;
   author?: string;
   image?: string;
+  /** A small square image, shown in a corner of the cards this addon adds. */
+  icon?: string;
   requires?: string[];
   conflicts?: string[];
   players?: Partial<PlayerRange>;

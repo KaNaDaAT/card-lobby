@@ -9,12 +9,15 @@ import { findCombo } from '../../engine/ops/flow';
 import { showdownScore } from '../../engine/round';
 import type { GameView, PlayerView, Prompt, PromptKind, Seat, VisibleCard, ZoneView } from '../../engine/types';
 import type { LobbyView } from '../../net/protocol';
+import { cardOrigins, type CardOrigin } from '../../packs/merge';
 import { valueText, type CardDef, type LoadedPack, type Pack } from '../../packs/types';
 import { mergeSelection } from '../../session/lobby';
 import { avatar, pill } from '../components/bits';
 import { cardBack, cardFace, showCard, type CardOpts } from '../components/card';
 import { confirmDialog } from '../components/dialog';
 import { h, type Child } from '../dom';
+import { tableEvents, type TableEvent } from '../events';
+import { playEvents } from '../sound';
 import { resolvePack, type RoomCtx } from './lobby';
 
 /** Kept by the room between redraws. */
@@ -29,9 +32,31 @@ export interface TableMemo {
   reacted: string | null;
   /** Who the round table's arrow pointed at last, so it only flashes when that changes. */
   focus: Seat | null;
+  /** The view drawn last, to tell what just happened. Redraws of the same view have no news. */
+  view: GameView | null;
+  /** What that view brought, when it came (page clock), and whether its log line is new. */
+  events: TableEvent[];
+  eventsAt: number;
+  tickerNew: boolean;
+  /** The newest log line drawn, so the ticker only flashes for a new one. */
+  ticker: string | null;
 }
 
-export const newTableMemo = (): TableMemo => ({ seen: new Set(), answered: null, picked: [], reacted: null, focus: null });
+export const newTableMemo = (): TableMemo => ({
+  seen: new Set(),
+  answered: null,
+  picked: [],
+  reacted: null,
+  focus: null,
+  view: null,
+  events: [],
+  eventsAt: 0,
+  tickerNew: false,
+  ticker: null,
+});
+
+/** A redraw this soon after a new view keeps its animations, since answering redraws at once. */
+const EVENTS_KEEP_MS = 250;
 
 export type TableLayout = 'classic' | 'round';
 const LAYOUT_KEY = 'cardlobby.tableLayout';
@@ -71,6 +96,12 @@ interface T {
   fresh: Set<string>;
   /** Card ids of every card this seat can see, by uid. */
   known: Map<string, string>;
+  /** The game or addon each card id comes from. */
+  origins: Map<string, CardOrigin>;
+  /** What happened since the last view. Pieces animate for it, once. */
+  events: TableEvent[];
+  /** The newest log line just arrived. */
+  tickerNew: boolean;
 }
 
 const WAITING_FOR: Record<PromptKind, string> = {
@@ -86,7 +117,18 @@ const WAITING_FOR: Record<PromptKind, string> = {
 export function tableMain(ctx: RoomCtx, lobby: LobbyView, game: GameView, memo: TableMemo): Child[] {
   const lp = resolvePack(ctx, lobby);
   if (!lp) return [h('section', { class: 'panel waiting' }, h('h2', null, 'Unknown game'), h('p', { class: 'muted' }, 'This page does not have the game the host is running.'))];
-  const pack = mergeSelection(lp, lobby.addons).pack ?? lp.pack;
+  const pack = mergeSelection(lp, lobby.addons, lobby.counts).pack ?? lp.pack;
+  if (memo.view !== game) {
+    memo.events = tableEvents(memo.view, game);
+    memo.eventsAt = Date.now();
+    memo.view = game;
+    const last = game.phase === 'round' ? game.log.at(-1) : undefined;
+    const key = last ? `${game.log.length}:${last.text}` : null;
+    memo.tickerNew = memo.ticker !== null && key !== null && key !== memo.ticker;
+    memo.ticker = key;
+    playEvents(memo.events);
+  }
+  const recent = Date.now() - memo.eventsAt < EVENTS_KEEP_MS;
   const t: T = {
     ctx,
     lobby,
@@ -98,13 +140,16 @@ export function tableMain(ctx: RoomCtx, lobby: LobbyView, game: GameView, memo: 
     prompt: game.prompt && game.prompt.id !== memo.answered ? game.prompt : null,
     fresh: new Set(),
     known: knownCards(game),
+    origins: cardOrigins(lp.pack, lp.addons, lobby.addons),
+    events: recent ? memo.events : [],
+    tickerNew: recent && memo.tickerNew,
   };
   if (game.prompt?.id !== memo.answered) memo.picked = memo.picked.filter((uid) => game.hand.some((c) => c.uid === uid));
 
   const watching = h('p', { class: 'muted small spectating' }, 'You are watching this game.');
   const content =
     tableLayout() === 'round'
-      ? h('section', { class: 'panel table table-round' }, roundTop(t), result(t), roundFelt(t), roundDock(t, watching))
+      ? h('section', { class: 'panel table table-round' }, roundTop(t), result(t), roundFelt(t), roundDock(t, watching), splash(t))
       : h(
           'section',
           { class: 'panel table' },
@@ -115,9 +160,23 @@ export function tableMain(ctx: RoomCtx, lobby: LobbyView, game: GameView, memo: 
           center(t),
           promptBar(t),
           game.you !== null ? yourArea(t, game.players[game.you]!) : watching,
+          splash(t),
         );
   for (const uid of t.fresh) memo.seen.add(uid);
   return [content];
+}
+
+/** A big "Your turn" over the table when your turn starts. It fades by itself. */
+function splash(t: T): HTMLElement | null {
+  if (!t.events.some((e) => e.kind === 'yourTurn')) return null;
+  return h('div', { class: 'splash', 'aria-hidden': 'true' }, h('span', null, 'Your turn'));
+}
+
+/** Classes that make a seat flash for what just happened to it. */
+function seatFlash(t: T, seat: Seat): string {
+  if (t.events.some((e) => e.kind === 'out' && e.seat === seat)) return ' is-knocked';
+  if (t.events.some((e) => e.kind === 'played' && e.seat === seat)) return ' is-acting';
+  return '';
 }
 
 // ---------- Pieces ----------
@@ -143,7 +202,7 @@ function def(t: T, cardId: string): CardDef {
 function face(t: T, card: VisibleCard, opts: CardOpts = {}): HTMLElement {
   const enter = !t.memo.seen.has(card.uid);
   t.fresh.add(card.uid);
-  return cardFace(t.lp, def(t, card.cardId), { ...opts, enter });
+  return cardFace(t.lp, def(t, card.cardId), { ...opts, enter, origin: t.origins.get(card.cardId) });
 }
 
 function back(t: T, key: string, opts: CardOpts = {}): HTMLElement {
@@ -218,9 +277,10 @@ function seat(t: T, p: PlayerView): HTMLElement {
   const choosable = t.prompt?.kind === 'choosePlayer' && t.prompt.choices.includes(p.seat);
   const isTurn = t.game.phase === 'round' && t.game.turnSeat === p.seat;
   const winner = t.game.result?.winners.includes(p.seat) && t.game.phase !== 'round';
-  const cls = ['seat', isTurn ? 'is-turn' : '', p.round !== 'in' && t.game.phase === 'round' ? 'is-out' : '', choosable ? 'is-choice' : '', winner ? 'is-winner' : '']
-    .filter(Boolean)
-    .join(' ');
+  const cls =
+    ['seat', isTurn ? 'is-turn' : '', p.round !== 'in' && t.game.phase === 'round' ? 'is-out' : '', choosable ? 'is-choice' : '', winner ? 'is-winner' : '']
+      .filter(Boolean)
+      .join(' ') + seatFlash(t, p.seat);
   const body = [
     h('div', { class: 'seat-head' }, avatar(p.name, p.color), h('span', { class: 'seat-name' }, p.name), tokens(t, p)),
     h('div', { class: 'seat-badges' }, badges(t, p), isTurn ? pill('Turn', 'pill-turn') : null),
@@ -266,19 +326,33 @@ function center(t: T, cls = 'center', compact = false): HTMLElement {
       } else if (zone.count === 1 && zone.known[0]) {
         cards = face(t, zone.known[0].card, { size: 'md', note: 'You know' });
       } else {
-        cards = h('div', { class: 'zone-stack' }, back(t, `zone:${id}`, { size: 'md' }), h('span', { class: 'zone-count' }, zone.count));
+        const shuffling = t.events.some((e) => e.kind === 'shuffle' && e.zone === id);
+        cards = h(
+          'div',
+          { class: `zone-stack${shuffling ? ' is-shuffling' : ''}` },
+          back(t, `zone:${id}`, { size: 'md' }),
+          h('span', { class: 'zone-count' }, zone.count),
+        );
       }
-      const knownList =
-        hidden && zone.count > 1 && zone.known.length
-          ? h(
-              'p',
-              { class: 'zone-known' },
-              `You know: ${zone.known.map((k) => `${def(t, k.card.cardId).name} at ${k.index + 1}`).join(', ')}`,
-            )
-          : null;
+      const knownList = hidden && zone.count > 1 && zone.known.length ? h('p', { class: 'zone-known' }, knownText(t, zone)) : null;
       return h('div', { class: 'zone' }, h('span', { class: 'zone-label' }, zoneTitle(t, id)), cards, knownList);
     }),
   );
+}
+
+const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
+
+/**
+ * The cards you know in a hidden pile, top first. Top cards in a row read as a plain list, a
+ * card further down says how far. The engine only sends positions you can know.
+ */
+function knownText(t: T, zone: ZoneView): string {
+  const name = (cardId: string) => def(t, cardId).name;
+  if (zone.known.every((k, i) => k.index === i)) {
+    const names = zone.known.map((k) => name(k.card.cardId)).join(', ');
+    return zone.known.length === 1 ? `The top card you saw: ${names}` : `The top cards you saw: ${names}`;
+  }
+  return `You know: ${zone.known.map((k) => `${name(k.card.cardId)} (${ordinal(k.index + 1)} from the top)`).join(', ')}`;
 }
 
 /** Your hand: cards to click when you are asked to play, cards to read otherwise. */
@@ -302,9 +376,11 @@ function yourArea(t: T, me: PlayerView): HTMLElement {
   const choosable = p?.kind === 'choosePlayer' && p.choices.includes(me.seat);
   const hand = yourHand(t);
   const isTurn = t.game.phase === 'round' && t.game.turnSeat === me.seat;
+  // Glows while the game waits on you, in your turn or not.
+  const asked = t.game.phase === 'round' && Boolean(p);
   return h(
     'div',
-    { class: `you${isTurn ? ' is-turn' : ''}${choosable ? ' is-choice' : ''}` },
+    { class: `you${isTurn ? ' is-turn' : ''}${asked ? ' is-asked' : ''}${choosable ? ' is-choice' : ''}${seatFlash(t, me.seat)}` },
     h(
       'div',
       { class: 'seat-head' },
@@ -342,9 +418,11 @@ function knocksYouOut(card: CardDef): boolean {
 function openHandCard(t: T, card: VisibleCard): void {
   const d = def(t, card.cardId);
   const p = t.prompt;
-  if (p?.kind !== 'play' || !p.alone.includes(card.uid)) return showCard(t.lp, d);
+  const origin = t.origins.get(card.cardId);
+  if (p?.kind !== 'play' || !p.alone.includes(card.uid)) return showCard(t.lp, d, { origin });
   const out = knocksYouOut(d);
   showCard(t.lp, d, {
+    origin,
     note: out ? 'Playing it puts it face up in front of you: you will be out of this round.' : undefined,
     actions: [{ label: out ? `Play ${d.name} and go out` : `Play ${d.name}`, kind: out ? 'danger' : 'primary', onClick: () => answer(t, [card.uid]) }],
   });
@@ -467,13 +545,21 @@ function promptBar(t: T): HTMLElement | null {
       );
       break;
     case 'choosePosition': {
-      title = titled('where does the card go? 1 is the top of the pile.');
+      // The card you are placing stays in sight, so you know what you are putting where.
+      const cardId = p.card ? t.known.get(p.card) : undefined;
+      const what = !cardId ? 'the card' : cardId === p.source ? 'it' : def(t, cardId).name;
+      title = titled(`where does ${what} go? 1 is the top of the pile.`);
       const buttons: Child[] = [];
       for (let i = 0; i < p.choices; i++) {
         const label = i === 0 ? '1 (top)' : i === p.choices - 1 ? `${i + 1} (bottom)` : String(i + 1);
         buttons.push(h('button', { type: 'button', class: 'btn btn-sm choice', onclick: () => answer(t, i) }, label));
       }
-      body = h('div', { class: 'choices choices-dense' }, buttons);
+      body = h(
+        'div',
+        { class: 'position-choice' },
+        cardId ? face(t, { uid: p.card!, cardId }, { size: 'md' }) : null,
+        h('div', { class: 'choices choices-dense' }, buttons),
+      );
       break;
     }
     case 'chooseCard':
@@ -544,10 +630,11 @@ function flagsRow(t: T): HTMLElement | null {
   );
 }
 
-/** The latest event, so nobody has to read the log to follow along. */
+/** The latest event, so nobody has to read the log to follow along. A new one slides in. */
 function ticker(t: T, cls: string): HTMLElement | null {
   const last = t.game.phase === 'round' ? t.game.log.at(-1) : undefined;
-  return last ? h('p', { class: `${cls}${last.private ? ' is-private' : ''}`, 'aria-hidden': 'true' }, last.text) : null;
+  if (!last) return null;
+  return h('p', { class: `${cls}${last.private ? ' is-private' : ''}${t.tickerNew ? ' is-new' : ''}`, 'aria-hidden': 'true' }, last.text);
 }
 
 function roundInfo(t: T): HTMLElement {
@@ -641,9 +728,10 @@ function roundSeat(t: T, p: PlayerView, angle: number, focused: boolean, flash: 
   const choosable = t.prompt?.kind === 'choosePlayer' && t.prompt.choices.includes(p.seat);
   const winner = g.result?.winners.includes(p.seat) && g.phase !== 'round';
   const out = p.round !== 'in' && g.phase === 'round';
-  const cls = ['rt-seat', isMe ? 'is-me' : '', focused ? 'is-focus' : '', focused && flash ? 'is-new' : '', out ? 'is-out' : '', choosable ? 'is-choice' : '', winner ? 'is-winner' : '']
-    .filter(Boolean)
-    .join(' ');
+  const cls =
+    ['rt-seat', isMe ? 'is-me' : '', focused ? 'is-focus' : '', focused && flash ? 'is-new' : '', out ? 'is-out' : '', choosable ? 'is-choice' : '', winner ? 'is-winner' : '']
+      .filter(Boolean)
+      .join(' ') + seatFlash(t, p.seat);
   const at = onOval(angle, 1);
   const body = [
     h('div', { class: 'rt-seat-head' }, avatar(p.name, p.color), h('span', { class: 'rt-seat-name' }, isMe ? `${p.name} (you)` : p.name), tokens(t, p)),

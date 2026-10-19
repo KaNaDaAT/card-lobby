@@ -171,6 +171,7 @@ function loadAddon(bytes: Uint8Array, hash: string, files: Map<string, Uint8Arra
   const prefix = `uploads/${hash.slice(0, 16)}/`;
   const addon = structuredClone(raw);
   if (addon.image) addon.image = prefix + addon.image;
+  if (addon.icon) addon.icon = prefix + addon.icon;
   for (const card of addon.cards?.add ?? []) if (card.image) card.image = prefix + card.image;
   for (const patch of Object.values(addon.cards?.modify ?? {})) if (patch.image) patch.image = prefix + patch.image;
 

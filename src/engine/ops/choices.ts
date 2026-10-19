@@ -3,6 +3,7 @@ import { resolveCount } from '../../packs/count';
 import type { Op } from '../../packs/types';
 import {
   cardName,
+  cardOf,
   handOf,
   interpolate,
   isIn,
@@ -12,6 +13,7 @@ import {
   participants,
   resolvePlayer,
   resolvePlayers,
+  resolveValue,
   resolveZone,
   seatVal,
   selfSeat,
@@ -19,6 +21,7 @@ import {
   type Rt,
 } from '../runtime';
 import type { Seat } from '../types';
+import { knows } from '../view';
 import type { OpDef } from './types';
 
 /**
@@ -107,17 +110,26 @@ export const guess: OpDef = {
 /**
  * A position in a zone, 0 is the top. For a card already in the zone (Mouse Trapper) there are
  * as many positions as cards. With `insert`, for a card going in, there is one more: the bottom.
+ * `card` names the card being placed, so the question can show it.
  */
 export const choosePosition: OpDef = {
   status: 'ready',
-  params: { zone: 'zone', as: 'as', insert: 'bool' },
+  params: { zone: 'zone', as: 'as', insert: 'bool', card: 'var' },
   required: ['zone', 'as'],
   asks: true,
   run(rt, op, frame) {
     const zone = resolveZone(rt, op.zone);
     if (!zone || (!zone.cards.length && op.insert !== true)) return 'abort';
     const positions = zone.cards.length + (op.insert === true ? 1 : 0);
-    if (frame.answer === undefined) return { ask: { kind: 'choosePosition', choices: positions } };
+    if (frame.answer === undefined) {
+      const uid = resolveValue(rt, op.card);
+      let card: string | undefined;
+      if (typeof uid === 'string') {
+        const home = Object.values(rt.s.zones).find((z) => z.cards.includes(uid));
+        if (home && knows(rt.s, selfSeat(rt), cardOf(rt, uid), home)) card = uid;
+      }
+      return { ask: { kind: 'choosePosition', choices: positions, ...(card ? { card } : {}) } };
+    }
     const pos = frame.answer as number;
     setVar(rt, String(op.as), pos);
     log(rt, `You chose position ${pos + 1} of ${positions} (1 is the top).`, [selfSeat(rt)]);

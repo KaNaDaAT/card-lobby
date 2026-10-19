@@ -49,14 +49,14 @@ uploaded). See "Addon zips" below. `npm run zip-pack -- <folder>` zips either ki
 | `description` | string | One or two sentences for the gallery |
 | `engine` | string | Lowest engine version the pack needs, like `0.1` |
 | `players` | `{ min, max }` | Player range without addons |
-| `art` | `{ cover, back, accent? }` | Image paths relative to the pack folder. `accent` is a CSS color for the lobby |
+| `art` | `{ cover, back, accent?, icon? }` | Image paths relative to the pack folder. `accent` is a CSS color for the lobby. `icon` is a small square image shown in a corner of the game's own cards, like a set symbol |
 | `options` | Option[] | Settings the host picks in the lobby |
 | `rules` | Rules | Zones, statuses, round setup, turn, showdown, scoring |
 | `cards` | Card[] | The base deck |
 | `addons` | string[] | Paths of addon files. This order is also the merge order |
 
-Image sizes: cover and addon images 1280 x 800 (16:10), cards and back 500 x 700 (5:7). SVG,
-PNG, JPG or WebP.
+Image sizes: cover and addon images 1280 x 800 (16:10), cards and back 500 x 700 (5:7), icons
+64 x 64 (square, drawn small, so bold shapes read best). SVG, PNG, JPG or WebP.
 
 Card images are illustrations only. The app draws the value, name and text on top, so an
 addon can change a card's value without new art. Keep the top-left corner and the bottom
@@ -192,7 +192,7 @@ the current effect is skipped. The card still counts as played.
 |---|---|---|
 | `buildDeck` | `to`, `only?`, `except?` (card ids) | M2. Puts every card of the merged pack into a zone, counts resolved for this round. M7: `only` or `except` pick some of them |
 | `shuffle` | `zone` | M2. Also clears knowledge and renews uids of the cards in it |
-| `move` | `from`, `to`, `count = 1` (or `all`), `faceUp?`, `at? = top / bottom / random / $var`, `card? = $var`, `match?` (card id), `secret?` | M2. Moves cards from the top of `from`, or one specific card. `from` may name several zones (`hand:$group`). M7: `match` moves the first card with that id. `secret` leaves only the mover knowing where the card went |
+| `move` | `from`, `to`, `count = 1` (or `all`), `faceUp?`, `at? = top / bottom / random / $var`, `card? = $var`, `match?` (card id), `secret?` | M2. Moves cards from the top of `from`, or one specific card. `from` may name several zones (`hand:$group`). M7: `match` moves the first card with that id. `secret` leaves only the mover knowing where the card went. A move into a hidden zone at a chosen or random position is always secret, and everyone else forgets the cards in that zone, since their places would tell where it went |
 | `deal` | `from`, `to` (players), `count = 1` | M2. Deals one card at a time, round-robin |
 | `draw` | `who`, `count = 1`, `fallback?` (zone) | M2. From `deck` into the hand. Uses `fallback` when the deck is empty. Fires `onDraw` |
 
@@ -213,7 +213,7 @@ the current effect is skipped. The card still counts as played.
 | `choosePlayer` | `as`, `from`, `except?`, `holding?` (card id), `withCards?`, `auto?`, `includeProtected?` | M2. `auto` skips the prompt when exactly one player fits. Untargetable players are skipped unless `includeProtected`. M7: `withCards` skips players with an empty hand. `except` leaves out players, like one chosen before (`"except": "$a"`) |
 | `selectPlayers` | `as`, `from`, `except?`, `withCards?`, `includeProtected?` | M2. No prompt. Stores every fitting player |
 | `guess` | `as`, `exclude?` (values) | M2. Pick a card value present in the merged deck. Logged for everyone |
-| `choosePosition` | `zone`, `as`, `insert?` | M2. 0 is the top. M7: `insert` adds the bottom, for a card going into the zone |
+| `choosePosition` | `zone`, `as`, `insert?`, `card?` ($var) | M2. 0 is the top. M7: `insert` adds the bottom, for a card going into the zone. `card` names the card being placed, so the question shows it (only to a player who knows it) |
 | `confirm` | `as`, `text` | M2. Yes or no |
 | `chooseCard` | `as`, `from` (zone), `by? = self`, `text?` | M7. `by` picks a card from the zone (Favor: the target picks from their own hand). Stores its uid. `text` replaces the prompt's "pick a card." and may use `{self}` |
 | `nameCard` | `as` | M7. Names a card id from this round's deck. Logged for everyone |
@@ -233,7 +233,7 @@ the current effect is skipped. The card still counts as played.
 | `if` | `cond`, `then`, `else?` | M2 |
 | `log` | `text`, `to? = all` | M2 |
 | `flag` | `id`, `to? = true` (or `false`, `"toggle"`) | Turns a round flag from `rules.flags` on or off |
-| `take` | `from`, `pick` (`random` or `$var`), `to? = hand:self` | M7. Moves one card: a random one, the uid from `chooseCard`, or the first card with the id from `nameCard`. A named card that is not there ends the effect |
+| `take` | `from`, `pick` (`random` or `$var`), `to? = hand:self` | M7. Moves one card: a random one, the uid from `chooseCard`, or the first card with the id from `nameCard`. A named card that is not there ends the effect. A random or chosen card from a hidden zone leaves everyone but the taker and the zone's owner forgetting that zone's cards |
 | `cancel` | `what: stackTop` | M7. Only in `onReact`. Cancels the play in the reaction window, or brings it back if it was canceled |
 | `reorder` | `zone`, `count` | Future (Alter the Future) |
 
@@ -280,6 +280,9 @@ An addon is a JSON file listed in the pack's `addons`. The host toggles addons i
 }
 ```
 
+An addon may also have an `icon` (a small square image). The cards it adds show it in a
+corner, so players can tell them from the game's own cards.
+
 Merge rules:
 
 - Addons apply in the order of the pack's `addons` list, not the order they were toggled.
@@ -312,7 +315,8 @@ my-addon/
 | `extends` | string | The pack id of the game it is for, like `"power-hungry-pets"` |
 | `author` | string | Optional. Shown to players before they download it |
 
-- Image paths are relative to the zip. Every image an addon card names must be in the zip.
+- Image paths are relative to the zip. The addon's `image` and `icon` and every image its cards
+  name must be in the zip.
 - It is merged after the game's own addons, in the order addons were uploaded. `requires` and
   `conflicts` may name the game's addons and other uploaded ones.
 - Its id must be new for that game.

@@ -2,7 +2,8 @@
  * Random game runner for the simulation tests. Plays seeded games with random legal inputs,
  * optionally with kicks and dropped connections, and checks invariants after every input:
  * the card count never changes within a round, no card is in two zones, the state stays plain
- * JSON, every game ends, and no view leaks a card its seat does not know.
+ * JSON, every game ends, no view leaks a card its seat does not know, and nobody can tell
+ * where a card was put back in secret.
  */
 import { resolveCount } from '../packs/count';
 import type { Pack } from '../packs/types';
@@ -109,6 +110,28 @@ function checkViews(s: GameState): void {
   }
 }
 
+/**
+ * Where a card goes back in secret must not show in anyone else's view. Tries the top, the
+ * bottom and the middle as answers and compares what every other seat sees of the shared zones
+ * and of the other players' hands. Their own hand may differ: they may draw the card.
+ */
+function checkSecretPosition(pack: Pack, s: GameState, prompt: Extract<Prompt, { kind: 'choosePosition' }>, now: number): void {
+  const answers = [...new Set([0, prompt.choices - 1, Math.floor(prompt.choices / 2)])];
+  if (answers.length < 2) return;
+  const others: (Seat | null)[] = [null, ...s.players.map((p) => p.seat).filter((seat) => seat !== prompt.to)];
+  const after = answers.map((value) => apply(pack, s, { kind: 'answer', seat: prompt.to, promptId: prompt.id, value, now }).state);
+  // The game may show it to everyone, like a next player with no cards drawing the kitten at once.
+  const told = after.map((state) => JSON.stringify(viewFor(state, null).log));
+  if (told.some((v) => v !== told[0])) return;
+  for (const seat of others) {
+    const seen = after.map((state) => {
+      const view = viewFor(state, seat);
+      return JSON.stringify({ zones: view.zones, hands: view.players.filter((p) => p.seat !== seat).map((p) => p.hand) });
+    });
+    if (seen.some((v) => v !== seen[0])) throw new Error(`seat ${seat} can tell where ${s.players[prompt.to]!.name} put a card`);
+  }
+}
+
 export interface Outcome {
   inputs: number;
   rounds: number;
@@ -173,6 +196,7 @@ export function playRandomGame(pack: Pack, players: number, seed: number, chaos:
     const prompt = s.prompt;
     if (!prompt) throw new Error(`seed ${seed}: round running without a prompt`);
     now += 500;
+    if (prompt.kind === 'choosePosition') checkSecretPosition(pack, s, prompt, now);
     step({ kind: 'answer', seat: prompt.to, promptId: prompt.id, value: randomAnswer(rng, prompt, s), now });
   }
   checkState(pack, s);

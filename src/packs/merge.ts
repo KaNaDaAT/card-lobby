@@ -56,6 +56,25 @@ export function mergeAddons(pack: Pack, addons: Addon[], enabled: readonly strin
   return merged;
 }
 
+/** Where a card comes from: the game, or the addon that added it. `icon` is its set symbol. */
+export interface CardOrigin {
+  name: string;
+  icon?: string;
+}
+
+/** The origin of every card id, in merge order, so a later addon that adds a card owns it. */
+export function cardOrigins(pack: Pack, addons: Addon[], enabled: readonly string[]): Map<string, CardOrigin> {
+  const origin = (name: string, icon: string | undefined): CardOrigin => (icon ? { name, icon } : { name });
+  const game = origin(pack.name, pack.art.icon);
+  const out = new Map(pack.cards.map((c) => [c.id, game]));
+  for (const addon of addons) {
+    if (!enabled.includes(addon.id)) continue;
+    const from = origin(addon.name, addon.icon);
+    for (const c of addon.cards?.add ?? []) out.set(c.id, from);
+  }
+  return out;
+}
+
 /** Problems with a set of enabled addons: unknown ids, missing requirements, conflicts. */
 export function addonProblems(addons: Addon[], enabled: readonly string[]): string[] {
   const byId = new Map(addons.map((a) => [a.id, a]));

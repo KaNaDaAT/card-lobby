@@ -8,12 +8,12 @@ async function zipOfPets(request: APIRequestContext, change: (pack: Pack) => voi
   const base = '/packs/power-hungry-pets/';
   const pack = (await (await request.get(`${base}pack.json`)).json()) as Pack;
   const files: Record<string, string> = {};
-  const paths = new Set([pack.art.cover, pack.art.back, ...pack.cards.flatMap((c) => (c.image ? [c.image] : []))]);
+  const paths = new Set([pack.art.cover, pack.art.back, pack.art.icon, ...pack.cards.map((c) => c.image)].filter((p): p is string => Boolean(p)));
   for (const path of pack.addons ?? []) {
     const text = await (await request.get(base + path)).text();
     files[path] = text;
     const addon = JSON.parse(text) as Addon;
-    for (const image of [addon.image, ...(addon.cards?.add ?? []).map((c) => c.image)]) if (image) paths.add(image);
+    for (const image of [addon.image, addon.icon, ...(addon.cards?.add ?? []).map((c) => c.image)]) if (image) paths.add(image);
   }
   for (const path of paths) files[path] = await (await request.get(base + path)).text();
   change(pack);
