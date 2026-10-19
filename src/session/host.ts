@@ -551,10 +551,12 @@ export class HostSession implements Session {
     return true;
   }
 
+  /** Back to the lobby, after the game or in the middle of it. */
   private endGame(): boolean {
     if (!this.game) return false;
+    const early = this.game.state.phase !== 'gameOver';
     this.game = null;
-    this.system('Back to the lobby.');
+    this.system(early ? 'The host ended the game. Back to the lobby.' : 'Back to the lobby.');
     return true;
   }
 

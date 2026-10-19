@@ -57,6 +57,21 @@ test('the host sets card counts and slow mode, and clears the chat', async ({ co
   expect(errors).toEqual([]);
 });
 
+test('the host can end a game for everyone', async ({ context, page }) => {
+  const errors: string[] = [];
+  watchErrors(page, errors, 'host');
+  const hash = await createLobby(page, 'Hana');
+  const tom = await joinTab(context, hash, '2', 'Tom', errors);
+  await page.click('button:has-text("Start game")');
+  await expect(tom.locator('.table')).toBeVisible();
+  await expect(tom.locator('.end-game')).toHaveCount(0);
+  await page.click('.end-game');
+  await page.click('dialog.confirm-dialog button:has-text("End the game")');
+  await expect(tom.locator('.hero-text h2')).toHaveText('Power Hungry Pets');
+  await expect(tom.locator('.chat-log')).toContainText('The host ended the game.');
+  expect(errors).toEqual([]);
+});
+
 test('a phone gets the side panels as drawers', async ({ context, page }) => {
   const errors: string[] = [];
   const hash = await createLobby(page, 'Hana');

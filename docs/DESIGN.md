@@ -107,6 +107,7 @@ nothing else.
   whose count is a plain number. Counts that depend on the players (one kitten less than
   players) are rules and stay. Start is blocked while the counts break round setup for the
   players at the table. The counts are fixed when the game starts and saved with it.
+- The host can end a game at any time, which sends everyone back to the lobby.
 - Each card shows the icon of the game or addon it comes from, when the pack has one.
 - Everyone sees the same lobby live. Only the host can change it.
 - Players list: color avatar, name, host and you badges, connection state, pack-ready state.
@@ -278,8 +279,10 @@ Safety rules:
    and options, players, chat, Start.
 3. **Table**, in two layouts each player picks for themselves (remembered per browser):
    - **Classic**: opponents along the top, deck and set-aside in the middle, your hand at the
-     bottom, played cards in front of each player, a prompt bar, tokens per player, log and
-     chat in a side panel (a drawer on phones), players below the table.
+     bottom, played cards in front of each player, tokens per player, log and chat in a side
+     panel (a drawer on phones), players below the table. Between the middle and your hand,
+     one slot holds the question, the reaction window or who the game waits on, so the table
+     does not jump when they come and go.
    - **Round table**: everyone seated around an oval in turn order, clockwise, you at the
      bottom. The seat the game waits on glows, an arrow and a spotlight point at it, and the
      middle says whose move it is, with the shared piles, round flags and the latest event.

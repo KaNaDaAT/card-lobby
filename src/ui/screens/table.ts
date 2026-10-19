@@ -154,11 +154,11 @@ export function tableMain(ctx: RoomCtx, lobby: LobbyView, game: GameView, memo: 
           'section',
           { class: 'panel table' },
           statusBar(t),
-          windowBanner(t),
           result(t),
           h('div', { class: 'seats' }, opponentOrder(t).map((p) => seat(t, p))),
           center(t),
-          promptBar(t),
+          // One slot keeps its place, so the table does not jump when a question or a window comes and goes.
+          h('div', { class: 'ask-slot' }, promptBar(t) ?? windowBanner(t) ?? waitingNote(t)),
           game.you !== null ? yourArea(t, game.players[game.you]!) : watching,
           splash(t),
         );
@@ -588,21 +588,6 @@ function promptBar(t: T): HTMLElement | null {
   return h('div', { class: 'prompt-bar', role: 'group', 'aria-label': title }, h('p', { class: 'prompt-title' }, title), body);
 }
 
-/** Whose move it is, in words. The host gets a button to take out a player who is away. */
-function turnStatus(t: T): HTMLElement | null {
-  const g = t.game;
-  if (g.phase !== 'round' || !g.waiting) return null;
-  const w = g.waiting;
-  const player = g.players[w.seat]!;
-  if (w.seat === g.you) return h('span', { class: 'turn-banner is-you' }, t.prompt ? 'Your move' : 'Sending...');
-  return h(
-    'span',
-    { class: 'turn-banner' },
-    player.connected ? `Waiting for ${player.name} ${WAITING_FOR[w.kind]}.` : `${player.name} is away. Waiting for them ${WAITING_FOR[w.kind]}.`,
-    kickButton(t, player),
-  );
-}
-
 function kickButton(t: T, player: PlayerView): HTMLElement | null {
   if (player.connected || !t.ctx.session.isHost) return null;
   return h(
@@ -650,14 +635,24 @@ function layoutToggle(t: T): HTMLElement {
   return h('div', { class: 'layout-toggle', role: 'group', 'aria-label': 'Table layout' }, option('classic', 'Classic'), option('round', 'Round table'));
 }
 
+/** The host can send everyone back to the lobby at any time. After the game the result has its own button. */
+function endGameButton(t: T): HTMLElement | null {
+  if (!t.ctx.session.isHost || t.game.phase === 'gameOver') return null;
+  const end = async () => {
+    const sure = await confirmDialog('End the game?', 'Everyone goes back to the lobby. This game cannot be picked up again.', 'End the game', 'Keep playing');
+    if (sure) t.ctx.session.act({ kind: 'endGame' });
+  };
+  return h('button', { type: 'button', class: 'btn btn-ghost btn-sm end-game', onclick: () => void end() }, 'End game');
+}
+
 function statusBar(t: T): HTMLElement {
-  return h('div', { class: 'table-status' }, roundInfo(t), turnStatus(t), layoutToggle(t), flagsRow(t), ticker(t, 'ticker'));
+  return h('div', { class: 'table-status' }, roundInfo(t), layoutToggle(t), endGameButton(t), flagsRow(t), ticker(t, 'ticker'));
 }
 
 // ---------- Round table ----------
 
 function roundTop(t: T): HTMLElement {
-  return h('div', { class: 'rt-top' }, roundInfo(t), layoutToggle(t));
+  return h('div', { class: 'rt-top' }, roundInfo(t), layoutToggle(t), endGameButton(t));
 }
 
 /** Seats around the oval in turn order, clockwise, you at the bottom. Angles in degrees, 90 is the bottom. */

@@ -1320,23 +1320,6 @@ select.input {
   font-size: 13px;
 }
 
-.turn-banner {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 10px;
-  margin-left: auto;
-  padding: 6px 12px;
-  border-radius: 12px;
-  background: var(--surface-2);
-  font-weight: 600;
-}
-
-.turn-banner.is-you {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
 .table-flags {
   display: flex;
   flex-wrap: wrap;
@@ -2248,6 +2231,17 @@ select.input {
   }
 }
 
+/* Classic: the question, the reaction window or who the game waits on, always in one place. */
+.ask-slot {
+  display: flex;
+  flex-direction: column;
+  min-height: 112px;
+}
+
+.ask-slot > * {
+  flex: 1;
+}
+
 /* Prompt */
 
 .prompt-bar {
@@ -2787,10 +2781,6 @@ dialog::backdrop {
 
   .card-lg {
     width: 104px;
-  }
-
-  .turn-banner {
-    margin-left: 0;
   }
 }
 
