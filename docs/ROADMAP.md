@@ -136,29 +136,31 @@ someone wants them.
 - [x] Optional round-table view: players seated around a table in turn order, an arrow and a
   glow on whoever has to act, players in a tab beside the log. Classic stays the default.
 
-## Playtest feedback (to do)
+## Playtest feedback (done)
 
-Noted after the first games with friends. Not started yet.
+Noted after the first games with friends. Protocol version 4.
 
-- [ ] **Bug, Exploding Kittens: known cards leak where a kitten went back.** After See the
-  Future, the draw pile shows "You know: X at 1, Y at 2, ..." and keeps those positions up to
-  date. So when the kitten is drawn, defused and put back in secret, the player who looked
-  can read where it went: if Watermelon Cat was 1st and is now 2nd, the kitten went back on
-  top. The positions travel in the view (`zone.known[].index`), not only in the text. Fix: a
-  secret insert must not update anyone else's positions in that pile. Show what you saw as a
-  plain list ("The top cards you saw: ...") without live positions, and do not send positions
-  the seat could not know. Add a simulation check for it.
-
-- [ ] **Sounds**: for your turn, a card played, a reaction, the end of a round. With a mute
-  switch.
-- [ ] **Clearer visuals**: a shuffle animation, a stronger signal for whose turn it is, and
-  clearer signals in general when something happens.
-- [ ] **Layout that uses the page**: always use the available space, above all on desktop.
-- [ ] **Chat**: a way to clear it, and a timeout for chat (for example a cooldown between
-  messages).
-- [ ] **Mouse Trapper (2) is buggy**: it should show clearly which card you looked at while
-  you choose where it goes back. Check what goes wrong.
-- [ ] **Card counts in the lobby**: let the host set how many copies of each card go into the
-  deck.
-- [ ] **Pack icons on cards**: a game or addon can have an icon, shown in a corner of each of
-  its cards, so players see which pack or addon a card comes from (like a set symbol).
+- [x] **Bug, Exploding Kittens: known cards leaked where a kitten went back.** After See the
+  Future, the draw pile kept the known positions up to date, so the player who looked could
+  read where a defused kitten went. Mouse Trapper had the same leak, and a known card that
+  turned up in someone's hand told it too. Now a card put into a hidden zone at a chosen or
+  random position makes everyone but the mover forget that zone's cards, and a random or
+  chosen card taken from a hand (Pair, Favor) does the same for that hand. The pile shows what
+  you know as a plain list ("The top cards you saw: ..."). The simulation tries several answers
+  to every position question and checks that nobody else's view changes.
+- [x] **Sounds**: your turn, a card played, a reaction, a shuffle, a player going out, the end
+  of a round and of the game. Made with the Web Audio API, no sound files. Mute switch in the
+  top bar.
+- [x] **Clearer visuals**: a riffle on a shuffled pile, a big "Your turn", a glow on your area
+  while the game waits on you, a flash on the seat that played, a red flash on a player who
+  goes out, the newest event sliding in, and "Your move" in the tab title.
+- [x] **Layout that uses the page**: no width cap, a wider side column on big screens, and
+  cards that grow with the screen. The round table takes more of the height.
+- [x] **Chat**: the host clears it for everyone, players clear their own screen. Slow mode:
+  2 seconds between messages by default, the host picks off to 60. The host is exempt.
+- [x] **Mouse Trapper (2)**: the question where the card goes back now shows the card and
+  names it. Nothing else was broken, but its put-back leaked like the kitten (see above).
+- [x] **Card counts in the lobby**: the host sets 0 to 20 copies of each card with a fixed
+  count. Start is blocked while the counts break round setup.
+- [x] **Pack icons on cards**: `art.icon` for a game, `icon` for an addon, shown in the top
+  right corner of its cards and in the large card view.
