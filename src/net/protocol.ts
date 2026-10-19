@@ -4,7 +4,7 @@ import type { OptionValue, PackOffer } from '../packs/types';
 
 export type { PackOffer } from '../packs/types';
 
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 /** Trystero action names. Kept short, Trystero limits their length. */
 export const ACTION = {
@@ -76,6 +76,8 @@ export interface LobbyView {
   chatCooldown: number;
   /** Copies of each card the host changed, by card id. Cards not listed keep the pack's count. */
   counts: Record<string, number>;
+  /** Seats at the table the host picked, or null for the game's own maximum. */
+  seats: number | null;
 }
 
 export interface View {
@@ -118,7 +120,10 @@ export type Intent =
   | { kind: 'clearChat' }
   | { kind: 'setChatCooldown'; seconds: number }
   | { kind: 'setCardCount'; cardId: string; count: number }
-  | { kind: 'resetCardCounts' };
+  /** Replaces every count at once, like loading a preset. */
+  | { kind: 'setCardCounts'; counts: Record<string, number> }
+  | { kind: 'resetCardCounts' }
+  | { kind: 'setSeats'; seats: number | null };
 
 /**
  * A player's answer to a pack offer. `cached` means they have the pack loaded, from their cache

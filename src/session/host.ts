@@ -28,9 +28,9 @@ import {
 import type { Channel, Transport } from '../net/transport';
 import { uploadProblems, withUploads } from '../packs/custom';
 import { mergeAddons } from '../packs/merge';
-import type { CardDef, LoadedAddon, LoadedPack, OptionValue, Pack, PackOffer } from '../packs/types';
+import type { LoadedAddon, LoadedPack, OptionValue, Pack, PackOffer } from '../packs/types';
 import { validateSelection } from '../packs/validate';
-import { countsProblem, MAX_CARD_COUNT, mergeSelection, optionValueOk, startBlocked, withCounts, type Selection } from './lobby';
+import { MAX_CARD_COUNT, MAX_SEATS, mergeSelection, optionValueOk, setupProblem, startBlocked, withTweaks, type Selection, type Tweaks } from './lobby';
 import type { Session, SessionState } from './types';
 
 export const NAME_MAX_LENGTH = 24;
@@ -79,9 +79,10 @@ interface Member {
 interface Game {
   packId: string;
   addons: string[];
-  /** Card counts the host picked, fixed when the game starts. */
+  /** Card counts and seats the host picked, fixed when the game starts. */
   counts: Record<string, number>;
-  /** The merged pack the game runs on. Rebuilt from packId, addons and counts on resume. */
+  seats: number | null;
+  /** The merged pack the game runs on. Rebuilt from packId, addons, counts and seats on resume. */
   pack: Pack;
   state: GameState;
 }
@@ -96,10 +97,11 @@ interface Snapshot {
   addons: string[];
   options: Record<string, OptionValue>;
   chat: ChatMessage[];
-  /** Missing in saves from before slow mode and card counts. */
+  /** Missing in saves from before slow mode, card counts and seats. */
   chatCooldown?: number;
   counts?: Record<string, number>;
-  game: { packId: string; addons: string[]; counts?: Record<string, number>; state: GameState } | null;
+  seats?: number | null;
+  game: { packId: string; addons: string[]; counts?: Record<string, number>; seats?: number | null; state: GameState } | null;
 }
 
 const randomSeed = () => crypto.getRandomValues(new Uint32Array(1))[0]!;
@@ -131,6 +133,8 @@ export class HostSession implements Session {
   private options: Record<string, OptionValue> = {};
   /** Copies the host picked, by card id. Only changed cards are listed. */
   private counts: Record<string, number> = {};
+  /** Seats the host picked, null for the game's own maximum. */
+  private seats: number | null = null;
   private chat: ChatMessage[] = [];
   private game: Game | null = null;
   private seq = 0;
@@ -184,6 +188,7 @@ export class HostSession implements Session {
       this.addons = saved.addons;
       this.options = saved.options;
       this.counts = saved.counts ?? {};
+      this.seats = saved.seats ?? null;
       this.chat = saved.chat;
       this.seq = saved.seq;
       this.chatCounter = saved.chatCounter;
@@ -404,6 +409,12 @@ export class HostSession implements Session {
         changed = isHost && inLobby && Object.keys(this.counts).length > 0;
         if (changed) this.counts = {};
         break;
+      case 'setCardCounts':
+        changed = isHost && inLobby && this.setCardCounts(intent.counts);
+        break;
+      case 'setSeats':
+        changed = isHost && inLobby && this.setSeats(intent.seats);
+        break;
     }
     if (changed) this.broadcast();
     if (changed && (intent.kind === 'selectPack' || (intent.kind === 'toggleAddon' && intent.on))) for (const m of this.members) this.offerFiles(m);
@@ -415,6 +426,7 @@ export class HostSession implements Session {
     this.addons = [];
     this.options = {};
     this.counts = {};
+    this.seats = null;
     this.fileStatus.clear();
     this.transfers.clear();
     return true;
@@ -491,26 +503,56 @@ export class HostSession implements Session {
       const def = defs.find((d) => d.id === id);
       if (!def || !optionValueOk(def, this.options[id])) delete this.options[id];
     }
-    const cards = this.baseCards();
+    const base = this.basePack();
     for (const [id, count] of Object.entries(this.counts)) {
-      const card = cards.find((c) => c.id === id);
+      const card = base?.cards.find((c) => c.id === id);
       if (typeof card?.count !== 'number' || card.count === count) delete this.counts[id];
     }
+    if (this.seats !== null && (!base || this.seats < base.players.min || this.seats === base.players.max)) this.seats = null;
     return true;
   }
 
-  /** The cards of the picked game and addons, with the pack's own counts. */
-  private baseCards(): CardDef[] {
+  /** The picked game and addons as the pack has them, before the host's changes. */
+  private basePack(): Pack | null {
     const lp = this.loadedPack();
-    return (lp && mergeSelection(lp, this.addons).pack?.cards) ?? [];
+    return (lp && mergeSelection(lp, this.addons).pack) ?? null;
+  }
+
+  private tweaks(): Tweaks {
+    return { counts: this.counts, seats: this.seats };
   }
 
   private setCardCount(cardId: string, count: number): boolean {
-    const card = this.baseCards().find((c) => c.id === cardId);
+    const card = this.basePack()?.cards.find((c) => c.id === cardId);
     if (typeof card?.count !== 'number' || !Number.isInteger(count) || count < 0 || count > MAX_CARD_COUNT) return false;
     if (count === (this.counts[cardId] ?? card.count)) return false;
     if (count === card.count) delete this.counts[cardId];
     else this.counts[cardId] = count;
+    return true;
+  }
+
+  /** Replaces every count, like loading a preset. Cards the game lacks or cannot change are skipped. */
+  private setCardCounts(counts: Record<string, number>): boolean {
+    const next: Record<string, number> = {};
+    for (const card of this.basePack()?.cards ?? []) {
+      const count = counts[card.id];
+      if (typeof card.count !== 'number' || count === undefined || count === card.count) continue;
+      if (Number.isInteger(count) && count >= 0 && count <= MAX_CARD_COUNT) next[card.id] = count;
+    }
+    const key = (c: Record<string, number>) => JSON.stringify(Object.entries(c).sort());
+    if (key(next) === key(this.counts)) return false;
+    this.counts = next;
+    return true;
+  }
+
+  /** Seats at the table, from the game's minimum up to MAX_SEATS. The game's own maximum means null. */
+  private setSeats(seats: number | null): boolean {
+    const base = this.basePack();
+    if (!base) return false;
+    const next = seats === base.players.max ? null : seats;
+    if (next !== null && (!Number.isInteger(next) || next < base.players.min || next > MAX_SEATS)) return false;
+    if (next === this.seats) return false;
+    this.seats = next;
     return true;
   }
 
@@ -546,7 +588,7 @@ export class HostSession implements Session {
       },
       this.now(),
     );
-    this.game = { packId: lp.key, addons: [...this.addons], counts: { ...this.counts }, pack: selection.pack, state };
+    this.game = { packId: lp.key, addons: [...this.addons], counts: { ...this.counts }, seats: this.seats, pack: selection.pack, state };
     this.system(`The game begins: ${selection.pack.name}.`);
     return true;
   }
@@ -674,7 +716,7 @@ export class HostSession implements Session {
 
   private selection(): Selection | null {
     const lp = this.loadedPack();
-    return lp ? mergeSelection(lp, this.addons, this.counts) : null;
+    return lp ? mergeSelection(lp, this.addons, this.tweaks()) : null;
   }
 
   /** Members who would get a seat if the game started now, in seat order. Who declined the pack watches. */
@@ -691,7 +733,7 @@ export class HostSession implements Session {
 
   /**
    * Validation errors for the current selection, cached per pack and addon set. Changed card
-   * counts are checked for the players who would sit down.
+   * counts and extra seats are checked for the players who would sit down.
    */
   private packProblems(selection: Selection | null, players: number): string[] {
     const lp = this.loadedPack();
@@ -704,13 +746,15 @@ export class HostSession implements Session {
       this.validation.set(key, errors);
     }
     if (errors.length) return [`This game has a problem. ${errors[0]}`];
-    if (!Object.keys(this.counts).length || !selection?.pack) return [];
-    const countsKey = `${key}|${JSON.stringify(this.counts)}|${players}`;
-    let problems = this.validation.get(countsKey);
+    const counted = Object.keys(this.counts).length > 0;
+    const extraSeats = this.seats !== null && this.seats > (this.basePack()?.players.max ?? Infinity);
+    if ((!counted && !extraSeats) || !selection?.pack) return [];
+    const tweaksKey = `${key}|${JSON.stringify(this.tweaks())}|${players}`;
+    let problems = this.validation.get(tweaksKey);
     if (!problems) {
-      const problem = countsProblem(selection.pack, players);
+      const problem = setupProblem(selection.pack, players, counted ? 'these card counts' : null);
       problems = problem ? [problem] : [];
-      this.validation.set(countsKey, problems);
+      this.validation.set(tweaksKey, problems);
     }
     return problems;
   }
@@ -759,6 +803,7 @@ export class HostSession implements Session {
       startBlocked: game ? this.nextRoundProblem(game.state) : this.startProblem(selection, this.seated(selection)),
       chatCooldown: this.chatCooldown,
       counts: { ...(game?.counts ?? this.counts) },
+      seats: game ? game.seats : this.seats,
     };
   }
 
@@ -820,7 +865,8 @@ export class HostSession implements Session {
       chat: this.chat,
       chatCooldown: this.chatCooldown,
       counts: this.counts,
-      game: game ? { packId: game.packId, addons: game.addons, counts: game.counts, state: game.state } : null,
+      seats: this.seats,
+      game: game ? { packId: game.packId, addons: game.addons, counts: game.counts, seats: game.seats, state: game.state } : null,
     };
     this.store.save(JSON.stringify(snapshot));
   }
@@ -841,8 +887,8 @@ export class HostSession implements Session {
     // A game whose uploaded addon is gone cannot go on.
     if (!saved || !lp || !saved.addons.every((id) => lp.addons.some((a) => a.id === id))) return null;
     try {
-      const counts = saved.counts ?? {};
-      const game: Game = { ...saved, counts, pack: withCounts(mergeAddons(lp.pack, lp.addons, saved.addons), counts) };
+      const tweaks: Tweaks = { counts: saved.counts ?? {}, seats: saved.seats ?? null };
+      const game: Game = { ...saved, ...tweaks, pack: withTweaks(mergeAddons(lp.pack, lp.addons, saved.addons), tweaks) };
       for (const p of game.state.players) p.connected = p.playerId === this.playerId;
       return game;
     } catch {
@@ -918,6 +964,13 @@ export function parseIntent(data: unknown): Intent | null {
       return isStr(d.cardId) && typeof d.count === 'number' ? { kind: 'setCardCount', cardId: d.cardId, count: d.count } : null;
     case 'resetCardCounts':
       return { kind: d.kind };
+    case 'setCardCounts': {
+      const entries = isObj(d.counts) ? Object.entries(d.counts) : [];
+      const ok = entries.length <= 200 && entries.every(([id, n]) => isStr(id, 64) && typeof n === 'number');
+      return isObj(d.counts) && ok ? { kind: 'setCardCounts', counts: Object.fromEntries(entries) as Record<string, number> } : null;
+    }
+    case 'setSeats':
+      return d.seats === null || typeof d.seats === 'number' ? { kind: 'setSeats', seats: d.seats } : null;
     case 'react':
       return isStr(d.uid, 64) ? { kind: 'react', uid: d.uid } : null;
     case 'answer':

@@ -367,6 +367,36 @@ describe('games through the session', () => {
     expect(reloaded.state().view!.lobby.counts).toEqual({ 'king-cat': 0, 'crystal-bowl': 9 });
   });
 
+  it('lets the host pick the seats, load counts at once, and end a game early', () => {
+    const { net, host, tom } = gameSetup();
+    const lobby = () => tom.state().view!.lobby;
+    tom.act({ kind: 'setSeats', seats: 3 });
+    host.act({ kind: 'setSeats', seats: 1 });
+    host.act({ kind: 'setSeats', seats: 13 });
+    net.flush();
+    expect(lobby().seats).toBeNull();
+    host.act({ kind: 'setSeats', seats: 8 });
+    net.flush();
+    expect(lobby().seats).toBe(8);
+    expect(lobby().startBlocked).toBeNull();
+    host.act({ kind: 'setSeats', seats: 6 });
+    net.flush();
+    expect(lobby().seats).toBeNull();
+
+    host.act({ kind: 'setCardCounts', counts: { 'king-cat': 0, 'crystal-bowl': 5, 'no-such-card': 3 } });
+    net.flush();
+    expect(lobby().counts).toEqual({ 'king-cat': 0 });
+
+    host.act({ kind: 'start' });
+    tom.act({ kind: 'endGame' });
+    net.flush();
+    expect(lobby().phase).toBe('playing');
+    host.act({ kind: 'endGame' });
+    net.flush();
+    expect(lobby().phase).toBe('lobby');
+    expect(tom.state().chat.at(-1)?.text).toBe('The host ended the game. Back to the lobby.');
+  });
+
   it('ignores answers from the wrong player', () => {
     const { net, host, tom } = gameSetup();
     host.act({ kind: 'start' });

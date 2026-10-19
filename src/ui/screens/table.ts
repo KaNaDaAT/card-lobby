@@ -11,7 +11,7 @@ import type { GameView, PlayerView, Prompt, PromptKind, Seat, VisibleCard, ZoneV
 import type { LobbyView } from '../../net/protocol';
 import { cardOrigins, type CardOrigin } from '../../packs/merge';
 import { valueText, type CardDef, type LoadedPack, type Pack } from '../../packs/types';
-import { mergeSelection } from '../../session/lobby';
+import { mergeSelection, tweaksOf } from '../../session/lobby';
 import { avatar, pill } from '../components/bits';
 import { cardBack, cardFace, showCard, type CardOpts } from '../components/card';
 import { confirmDialog } from '../components/dialog';
@@ -117,7 +117,7 @@ const WAITING_FOR: Record<PromptKind, string> = {
 export function tableMain(ctx: RoomCtx, lobby: LobbyView, game: GameView, memo: TableMemo): Child[] {
   const lp = resolvePack(ctx, lobby);
   if (!lp) return [h('section', { class: 'panel waiting' }, h('h2', null, 'Unknown game'), h('p', { class: 'muted' }, 'This page does not have the game the host is running.'))];
-  const pack = mergeSelection(lp, lobby.addons, lobby.counts).pack ?? lp.pack;
+  const pack = mergeSelection(lp, lobby.addons, tweaksOf(lobby)).pack ?? lp.pack;
   if (memo.view !== game) {
     memo.events = tableEvents(memo.view, game);
     memo.eventsAt = Date.now();

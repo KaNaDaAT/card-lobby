@@ -255,7 +255,7 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
       if (lines) lines.scrollTop = lines.scrollHeight;
     } else {
       memo = newTableMemo();
-      replace(mainRegion, lobbyMain(c, view.lobby));
+      keepPlace(mainRegion, () => replace(mainRegion, lobbyMain(c, view.lobby)));
       replace(sideRegion, playersPanel(c, view.lobby));
       sideLabel = 'Players';
     }
@@ -365,6 +365,20 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
     ctx?.session.leave();
   };
 };
+
+/**
+ * Redraws a region without losing the reader's place: rows marked `data-keep-scroll` keep their
+ * scroll, and the focused button keeps focus (found again by its label), so clicking + on a card
+ * count twice in a row works.
+ */
+function keepPlace(region: Element, redraw: () => void): void {
+  const scrolls = new Map([...region.querySelectorAll<HTMLElement>('[data-keep-scroll]')].map((el) => [el.dataset.keepScroll!, el.scrollLeft]));
+  const focused = document.activeElement;
+  const label = focused instanceof HTMLElement && region.contains(focused) ? focused.getAttribute('aria-label') : null;
+  redraw();
+  for (const el of region.querySelectorAll<HTMLElement>('[data-keep-scroll]')) el.scrollLeft = scrolls.get(el.dataset.keepScroll!) ?? 0;
+  if (label) [...region.querySelectorAll<HTMLElement>('[aria-label]')].find((el) => el.getAttribute('aria-label') === label)?.focus({ preventScroll: true });
+}
 
 function statusBanner(state: SessionState): Child {
   if (state.status === 'hostAway') {

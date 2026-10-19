@@ -929,6 +929,44 @@ select.input {
   font-size: 13px;
 }
 
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 8px;
+}
+
+.presets-label {
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.preset {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.preset .btn {
+  border: 0;
+}
+
+.preset-save {
+  display: flex;
+  gap: 6px;
+}
+
+.preset-save .input {
+  width: 150px;
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
 .card-name {
   position: absolute;
   right: 6%;

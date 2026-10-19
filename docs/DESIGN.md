@@ -106,7 +106,12 @@ nothing else.
 - The host can change how many copies of each card go into the deck (0 to 20), for cards
   whose count is a plain number. Counts that depend on the players (one kitten less than
   players) are rules and stay. Start is blocked while the counts break round setup for the
-  players at the table. The counts are fixed when the game starts and saved with it.
+  players at the table. The counts are fixed when the game starts and saved with it. The
+  host can save counts as named presets in their browser, per game, and load them later.
+- The host picks the seats, from the game's minimum up to 12. Fewer than the game allows
+  makes the rest watch. More than it allows keeps counts that depend on the players by ranges
+  (tokens to win) at their value for the game's maximum, and Start is blocked while the deck
+  cannot be dealt for the players at the table.
 - The host can end a game at any time, which sends everyone back to the lobby.
 - Each card shows the icon of the game or addon it comes from, when the pack has one.
 - Everyone sees the same lobby live. Only the host can change it.

@@ -9,12 +9,13 @@ import { resolveCount } from '../../packs/count';
 import { withUploads } from '../../packs/custom';
 import { addonProblems, cardOrigins } from '../../packs/merge';
 import type { Count, LoadedAddon, LoadedPack, OptionDef, OptionValue, Pack } from '../../packs/types';
-import { AUTO, MAX_CARD_COUNT, mergeSelection } from '../../session/lobby';
+import { AUTO, MAX_CARD_COUNT, MAX_SEATS, mergeSelection, tweaksOf } from '../../session/lobby';
 import type { HostSession } from '../../session/host';
 import type { Session } from '../../session/types';
 import { avatar, pill, section } from '../components/bits';
 import { cardFace } from '../components/card';
 import { packBadge, packConsent, removeAddonUpload, removeUpload, uploadProblems, uploadTile } from '../components/packs';
+import { countPresets, deleteCountPreset, saveCountPreset } from '../presets';
 import { h, type Child } from '../dom';
 
 export interface RoomCtx {
@@ -165,12 +166,77 @@ function cardStrip(ctx: RoomCtx, lobby: LobbyView, lp: LoadedPack, shown: Pack, 
         editable ? 'You changed how many copies go into the deck.' : 'The host changed how many copies go into the deck.',
         editable ? h('button', { type: 'button', class: 'btn btn-ghost btn-xs', onclick: () => ctx.session.act({ kind: 'resetCardCounts' }) }, 'Reset') : null,
       );
-  return [h('div', { class: 'card-strip' }, cards), note];
+  return [h('div', { class: 'card-strip', 'data-keep-scroll': 'cards' }, cards), note, editable ? presetsRow(ctx, lobby, lp) : null];
+}
+
+/** The preset name being typed, so a redraw does not clear it. */
+let presetName = '';
+
+/** Card count presets the host keeps in this browser: load or delete one, or save the counts now. */
+function presetsRow(ctx: RoomCtx, lobby: LobbyView, lp: LoadedPack): HTMLElement {
+  const gameId = lp.pack.id;
+  const presets = countPresets(gameId);
+  const names = Object.keys(presets).sort((a, b) => a.localeCompare(b));
+  const save = (e: Event) => {
+    e.preventDefault();
+    const name = presetName.trim();
+    if (!name) return;
+    saveCountPreset(gameId, name, lobby.counts);
+    presetName = '';
+    ctx.redraw();
+  };
+  return h(
+    'div',
+    { class: 'presets' },
+    h('span', { class: 'presets-label' }, 'Presets'),
+    names.map((name) =>
+      h(
+        'span',
+        { class: 'preset' },
+        h('button', { type: 'button', class: 'btn btn-xs', title: `Load ${name}`, onclick: () => ctx.session.act({ kind: 'setCardCounts', counts: presets[name]! }) }, name),
+        h('button', { type: 'button', class: 'btn btn-ghost btn-xs', 'aria-label': `Delete preset ${name}`, title: 'Delete', onclick: () => (deleteCountPreset(gameId, name), ctx.redraw()) }, 'x'),
+      ),
+    ),
+    h(
+      'form',
+      { class: 'preset-save', onsubmit: save },
+      h('input', {
+        class: 'input input-sm',
+        placeholder: 'Preset name',
+        'aria-label': 'Preset name',
+        maxlength: 40,
+        value: presetName,
+        oninput: (e: Event) => (presetName = (e.target as HTMLInputElement).value),
+      }),
+      h('button', { type: 'submit', class: 'btn btn-xs' }, 'Save counts'),
+    ),
+  );
+}
+
+/** How many seats the table has. The host may go below or above the game's own maximum. */
+function seatsControl(ctx: RoomCtx, lobby: LobbyView, base: Pack, editable: boolean): HTMLElement {
+  const max = base.players.max;
+  const current = lobby.seats ?? max;
+  const values: number[] = [];
+  for (let n = base.players.min; n <= Math.max(MAX_SEATS, max); n++) values.push(n);
+  const label = (n: number) => (n === max ? `${n} (the game's maximum)` : n > max ? `${n} (more than the game is made for)` : String(n));
+  return h(
+    'select',
+    {
+      class: 'input',
+      disabled: !editable,
+      onchange: (e: Event) => {
+        const n = Number((e.target as HTMLSelectElement).value);
+        ctx.session.act({ kind: 'setSeats', seats: n === max ? null : n });
+      },
+    },
+    values.map((n) => h('option', { value: n, selected: n === current }, label(n))),
+  );
 }
 
 function gameDetail(ctx: RoomCtx, lobby: LobbyView, lp: LoadedPack): HTMLElement {
   const editable = ctx.session.isHost;
-  const { pack, problems } = mergeSelection(lp, lobby.addons, lobby.counts);
+  const { pack, problems } = mergeSelection(lp, lobby.addons, tweaksOf(lobby));
   const shown = pack ?? lp.pack;
   // Preview counts for the lobby size, clamped to what the pack allows.
   const players = Math.min(shown.players.max, Math.max(shown.players.min, seatedCount(lobby)));
@@ -216,6 +282,12 @@ function gameDetail(ctx: RoomCtx, lobby: LobbyView, lp: LoadedPack): HTMLElement
       );
     });
 
+  const base = mergeSelection(lp, lobby.addons).pack ?? lp.pack;
+  const seats = h('label', { class: 'option' }, h('span', { class: 'option-label' }, 'Seats'), seatsControl(ctx, lobby, base, editable));
+  const seatsNote =
+    lobby.seats !== null && lobby.seats > base.players.max
+      ? h('p', { class: 'muted small' }, `More seats than the game is made for. Counts that depend on the players stay as they are for ${base.players.max}. Add copies above if the deck runs short.`)
+      : null;
   const options = (shown.options ?? []).map((def) =>
     h(
       'label',
@@ -251,7 +323,7 @@ function gameDetail(ctx: RoomCtx, lobby: LobbyView, lp: LoadedPack): HTMLElement
     problems.length && !editable ? h('p', { class: 'form-error' }, problems[0]) : null,
     section('Cards', cardStrip(ctx, lobby, lp, shown, players)),
     addons.length ? section('Addons', h('div', { class: 'addons' }, addons)) : null,
-    options.length ? section('Options', h('div', { class: 'options' }, options)) : null,
+    section('Options', h('div', { class: 'options' }, seats, options), seatsNote),
     h(
       'div',
       { class: 'start-row' },
@@ -316,7 +388,7 @@ function optionControl(
 
 export function playersPanel(ctx: RoomCtx, lobby: LobbyView, game: GameView | null = null): HTMLElement {
   const lp = resolvePack(ctx, lobby);
-  const max = lp ? (mergeSelection(lp, lobby.addons).pack ?? lp.pack).players.max : undefined;
+  const max = lp ? (mergeSelection(lp, lobby.addons, tweaksOf(lobby)).pack ?? lp.pack).players.max : undefined;
   const isHost = ctx.session.isHost;
   // Watchers who could take over an away player's seat.
   const watchers = lobby.players.filter((p) => p.role === 'spectator' && p.connected);
