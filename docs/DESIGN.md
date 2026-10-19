@@ -291,7 +291,16 @@ Safety rules:
    - In both, clicking a card in your hand opens it large with its text, with Play and Back.
      Cards played in combos are picked instead, and one picked card shows its text. The
      question where a card goes back (Mouse Trapper, a defused kitten) shows that card.
-4. **Round end**: hands revealed, the winner, tokens. **Game end**: winner and rematch.
+   - The room uses the whole window. On wide screens the cards grow with it, so the table fills
+     the screen instead of sitting in a narrow column.
+4. **Signals** (`src/ui/events.ts` compares the view a page had with the new one): a big
+   "Your turn" when your turn starts, a glow on your area while the game waits on you, a flash
+   on the seat that played a card, a red flash and shake on a player who goes out, a riffle on a
+   pile that was shuffled, and the newest log line sliding in. The tab title says "Your move".
+   Each comes with a short sound (`src/ui/sound.ts`, made with the Web Audio API, no sound
+   files), with a mute switch in the top bar that the browser remembers. Reduced motion turns
+   the animations off.
+5. **Round end**: hands revealed, the winner, tokens. **Game end**: winner and rematch.
 
 ## Testing
 

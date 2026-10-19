@@ -445,7 +445,6 @@ select.input {
   display: flex;
   align-items: center;
   gap: 16px;
-  max-width: 1320px;
   margin: 0 auto;
   padding: 16px 20px 0;
 }
@@ -489,8 +488,28 @@ select.input {
   font-weight: 600;
 }
 
+.icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sound-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sound-toggle[aria-pressed='false'] {
+  color: var(--text-3);
+}
+
 .notice {
-  width: min(1280px, calc(100% - 40px));
+  width: calc(100% - 40px);
   margin: 16px auto 0;
   padding: 10px 14px;
   border: 1px dashed color-mix(in srgb, var(--accent) 60%, var(--border));
@@ -509,9 +528,8 @@ select.input {
 
 .room-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) clamp(320px, 24vw, 460px);
   gap: 20px;
-  max-width: 1320px;
   margin: 0 auto;
   padding: 20px;
 }
@@ -1215,6 +1233,25 @@ select.input {
   width: min(260px, 70vw);
 }
 
+/* Wide screens: cards grow with the screen, so the table fills it. */
+@media (min-width: 1280px) {
+  .card-sm {
+    width: clamp(52px, min(3.2vw, 6vh), 76px);
+  }
+
+  .card-md {
+    width: clamp(82px, min(5vw, 9.5vh), 124px);
+  }
+
+  .card-lg {
+    width: clamp(128px, min(7.4vw, 13.5vh), 184px);
+  }
+
+  .card-strip {
+    grid-auto-columns: clamp(104px, 6.4vw, 150px);
+  }
+}
+
 /* Small cards keep only a big value. Click one to read it. */
 .card-sm .card-name {
   display: none;
@@ -1322,8 +1359,11 @@ select.input {
 
 .ticker {
   width: 100%;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--surface-2);
   color: var(--text-2);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .ticker.is-private {
@@ -1603,7 +1643,7 @@ select.input {
  * instead of a smaller one, so the seats keep room around the middle.
  */
 .rt-felt {
-  --rt-h: clamp(230px, calc(100dvh - 480px), 560px);
+  --rt-h: clamp(230px, calc(100dvh - 480px), 860px);
   position: relative;
   width: min(100cqw, calc(var(--rt-h) * 2.3));
   height: min(var(--rt-h), calc(100cqw / 1.5));
@@ -1667,6 +1707,8 @@ select.input {
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  padding: 2px 8px;
+  border-radius: 8px;
   color: rgb(255 255 255 / 0.85);
   font-size: 13px;
 }
@@ -2033,6 +2075,179 @@ select.input {
   }
 }
 
+/* Signals: what just happened, and whose move it is */
+
+.seat,
+.you {
+  position: relative;
+}
+
+.seat.is-turn {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+}
+
+/* The game waits on you: your area glows until you answer. */
+.you.is-asked {
+  border-color: var(--accent);
+  animation: turn-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes turn-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+}
+
+/* A seat flashes when its player plays a card, and flashes red and shakes when they go out. */
+.is-acting::before,
+.is-knocked::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: seat-flash 1.1s ease-out forwards;
+}
+
+.is-acting::before {
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+.is-knocked::before {
+  background: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.is-knocked {
+  animation: knocked 0.5s ease-in-out;
+}
+
+@keyframes seat-flash {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes knocked {
+  20% {
+    translate: -7px 0;
+  }
+  40% {
+    translate: 7px 0;
+  }
+  60% {
+    translate: -4px 0;
+  }
+  80% {
+    translate: 3px 0;
+  }
+}
+
+/* A shuffled pile riffles. */
+.zone-stack.is-shuffling > .card {
+  animation: riffle-top 0.9s ease-in-out;
+}
+
+.zone-stack.is-shuffling::before {
+  animation: riffle-under 0.9s ease-in-out;
+}
+
+@keyframes riffle-top {
+  20% {
+    translate: -26px -6px;
+    rotate: -10deg;
+  }
+  45% {
+    translate: 20px 2px;
+    rotate: 7deg;
+  }
+  70% {
+    translate: -12px 0;
+    rotate: -4deg;
+  }
+}
+
+@keyframes riffle-under {
+  20% {
+    translate: 28px 8px;
+    rotate: 11deg;
+  }
+  45% {
+    translate: -20px 0;
+    rotate: -7deg;
+  }
+  70% {
+    translate: 12px 4px;
+    rotate: 4deg;
+  }
+}
+
+/* The newest event slides in and lights up for a moment. */
+.ticker.is-new,
+.rt-ticker.is-new {
+  animation:
+    ticker-in 0.45s ease-out,
+    ticker-glow 1.8s ease-out;
+}
+
+@keyframes ticker-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}
+
+@keyframes ticker-glow {
+  from {
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+}
+
+/* "Your turn", big, in the middle of the screen. It fades by itself and never blocks a click. */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.splash span {
+  padding: 14px 36px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: clamp(30px, 4vw, 52px);
+  font-weight: 900;
+  box-shadow: 0 14px 44px rgb(0 0 0 / 0.35);
+  animation: splash 1.6s ease-out forwards;
+}
+
+@keyframes splash {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  14% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  24% {
+    transform: scale(1);
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+}
+
 /* Prompt */
 
 .prompt-bar {
@@ -2155,7 +2370,8 @@ select.input {
 
 @media (prefers-reduced-motion: reduce) {
   .rt-seat.is-focus,
-  .rt-seat.is-focus::after {
+  .rt-seat.is-focus::after,
+  .you.is-asked {
     animation: none;
   }
 
@@ -2526,6 +2742,10 @@ dialog::backdrop {
 
   .me-chip {
     margin-left: auto;
+  }
+
+  .sound-label {
+    display: none;
   }
 
   .hero {

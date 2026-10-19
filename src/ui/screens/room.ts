@@ -12,8 +12,9 @@ import { browserPackLoader, loadCachedPacks } from '../../packs/loader';
 import { ClientSession } from '../../session/client';
 import { HostSession } from '../../session/host';
 import type { Session, SessionState } from '../../session/types';
-import { avatar, brandMark, pill } from '../components/bits';
+import { avatar, brandMark, icon, pill } from '../components/bits';
 import { confirmDialog } from '../components/dialog';
+import { isMuted, setMuted } from '../sound';
 import { h, replace, type Child } from '../dom';
 import { roomLink, type Screen } from '../router';
 import { packConsent } from '../components/packs';
@@ -21,6 +22,10 @@ import { lobbyMain, needsFiles, playersPanel, resolvePack, type RoomCtx } from '
 import { logPanel, newTableMemo, tableLayout, tableMain, type TableMemo } from './table';
 
 const DEFAULT_ACCENT = '#9d85ff';
+const TITLE = 'Card Lobby';
+const SPEAKER = 'M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z';
+const SPEAKER_ON = [SPEAKER, 'M15.5 9a4 4 0 0 1 0 6', 'M18 6.5a7.5 7.5 0 0 1 0 11'];
+const SPEAKER_OFF = [SPEAKER, 'M16 9.5l5 5', 'M21 9.5l-5 5'];
 
 export function useLocalTransport(): boolean {
   return new URLSearchParams(location.search).get('transport') === 'local';
@@ -114,6 +119,20 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
   };
   document.addEventListener('keydown', onKey);
 
+  const soundButton = h('button', { type: 'button', class: 'btn btn-ghost btn-sm sound-toggle' });
+  const updateSound = () => {
+    const off = isMuted();
+    replace(soundButton, icon(off ? SPEAKER_OFF : SPEAKER_ON), h('span', { class: 'sound-label' }, off ? 'Sound off' : 'Sound on'));
+    soundButton.setAttribute('aria-pressed', String(!off));
+    soundButton.setAttribute('aria-label', 'Sound');
+    soundButton.title = off ? 'Turn sounds on' : 'Mute sounds';
+  };
+  soundButton.addEventListener('click', () => {
+    setMuted(!isMuted());
+    updateSound();
+  });
+  updateSound();
+
   const copyButton = h('button', { type: 'button', class: 'btn btn-ghost btn-sm' }, 'Copy link');
   copyButton.addEventListener('click', async () => {
     try {
@@ -140,6 +159,7 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
         h('code', null, formatCode(code)),
         copyButton,
       ),
+      soundButton,
       h('span', { class: 'me-chip' }, avatar(me.name, me.color), h('span', { class: 'me-name' }, me.name)),
     ),
     banner,
@@ -184,6 +204,8 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
     updateSend();
     const slow = chatTools.querySelector('select');
     if (slow && view) slow.value = String(view.lobby.chatCooldown);
+    // A tab in the background says when the game waits on you.
+    document.title = view?.game?.phase === 'round' && view.game.prompt ? `Your move - ${TITLE}` : TITLE;
 
     replace(banner, statusBanner(state));
     if (state.status === 'outdated') {
@@ -338,6 +360,7 @@ export const renderRoom: Screen<{ name: 'room'; code: string }> = (root, { code 
   return () => {
     disposed = true;
     clearTimeout(sendTick);
+    document.title = TITLE;
     document.removeEventListener('keydown', onKey);
     ctx?.session.leave();
   };

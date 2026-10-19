@@ -25,6 +25,7 @@ export function viewFor(s: GameState, seat: Seat | null, now = 0): GameView {
     known: (zone?.cards ?? []).flatMap((uid, index) =>
       knows(s, you, s.cards[uid]!, zone!) ? [{ index, card: visible(uid) }] : [],
     ),
+    shuffles: zone?.shuffles ?? 0,
   });
 
   const zones: GameView['zones'] = {};
@@ -36,6 +37,7 @@ export function viewFor(s: GameState, seat: Seat | null, now = 0): GameView {
     phase: s.phase,
     tokensToWin: s.tokensToWin,
     turnSeat: s.turn.seat,
+    turnNumber: s.turn.count,
     deciding: s.deciding ? [...s.deciding] : null,
     players: s.players.map((p) => ({
       seat: p.seat,

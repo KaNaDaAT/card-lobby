@@ -67,7 +67,8 @@ network, no clock, seeded RNG, plain-JSON state. Only the host runs it.
   (minimal reader), `custom.ts` (import a game or addon zip, put uploaded addons with their game,
   blob URLs, SHA-256), `cache.ts` (IndexedDB by hash, per `?as=` slot), `loader.ts` (cache
   first, then a checked download)
-- `src/ui` DOM helper, router, components, screens
+- `src/ui` DOM helper, router, components, screens, `events.ts` (what changed between two views)
+  and `sound.ts` (Web Audio sounds for those events, with mute)
 - `src/identity.ts` local player id, name, color, host marker
 - `src/styles` design tokens (light and dark) and app styles
 - `e2e` browser tests (`*.e2e.ts`), several local-mode tabs acting as players

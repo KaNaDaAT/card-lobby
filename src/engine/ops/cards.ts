@@ -52,6 +52,7 @@ export const buildDeck: OpDef = {
  * so nobody can follow a card through a shuffle.
  */
 export function shuffleZone(rt: Rt, zone: Zone): void {
+  zone.shuffles = (zone.shuffles ?? 0) + 1;
   shuffleInPlace(rt.s.rng, zone.cards);
   zone.cards = zone.cards.map((old) => {
     const card = rt.s.cards[old]!;
