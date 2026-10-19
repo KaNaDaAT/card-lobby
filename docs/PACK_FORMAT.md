@@ -214,7 +214,7 @@ the current effect is skipped. The card still counts as played.
 | `selectPlayers` | `as`, `from`, `except?`, `withCards?`, `includeProtected?` | M2. No prompt. Stores every fitting player |
 | `guess` | `as`, `exclude?` (values) | M2. Pick a card value present in the merged deck. Logged for everyone |
 | `choosePosition` | `zone`, `as`, `insert?`, `card?` ($var) | M2. 0 is the top. M7: `insert` adds the bottom, for a card going into the zone. `card` names the card being placed, so the question shows it (only to a player who knows it) |
-| `confirm` | `as`, `text` | M2. Yes or no |
+| `confirm` | `as`, `text`, `card?` ($var) | M2. Yes or no. `card` names the card the question is about, like the one you may swap for, so the question shows it |
 | `chooseCard` | `as`, `from` (zone), `by? = self`, `text?` | M7. `by` picks a card from the zone (Favor: the target picks from their own hand). Stores its uid. `text` replaces the prompt's "pick a card." and may use `{self}` |
 | `nameCard` | `as` | M7. Names a card id from this round's deck. Logged for everyone |
 
@@ -223,7 +223,7 @@ the current effect is skipped. The card still counts as played.
 | Op | Params | Status |
 |---|---|---|
 | `peek` | `zone`, `count = 1`, `as?` | M2. Shows cards from the top to self only |
-| `reveal` | `zone`, `to` (`all` or players) | M2 |
+| `reveal` | `zone`, `to` (`all` or players), `as?` | M2. `as` stores the uids shown, one uid for a single card |
 | `swap` | `a`, `b` (single-card zones) | M2. Each previous holder still knows the card they gave away |
 | `passHands` | `who`, `direction? = next` (or `previous`) | Each of the players passes their hand to the next of them in turn order. Everyone still knows what they passed on |
 | `discard` | `who` | M2. Forced: hand card goes face up in front of them. Fires `onDiscard`, not `onPlay` |

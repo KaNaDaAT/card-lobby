@@ -85,6 +85,8 @@ interface PromptBase {
   /** The combo whose effect asks, if any. */
   combo?: string;
   text?: string;
+  /** The card the question is about (the one to place or to swap for), when the answering seat knows it. */
+  card?: string;
 }
 
 /**
@@ -106,12 +108,7 @@ export type Prompt =
     })
   | (PromptBase & { kind: 'choosePlayer'; choices: Seat[] })
   | (PromptBase & { kind: 'guess'; choices: number[] })
-  | (PromptBase & {
-      kind: 'choosePosition';
-      choices: number;
-      /** The card going into the zone, when the answering seat knows it. */
-      card?: string;
-    })
+  | (PromptBase & { kind: 'choosePosition'; choices: number })
   | (PromptBase & { kind: 'confirm' })
   | (PromptBase & { kind: 'chooseCard'; choices: string[] })
   | (PromptBase & { kind: 'nameCard'; choices: string[] });

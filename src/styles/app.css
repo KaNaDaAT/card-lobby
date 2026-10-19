@@ -2299,14 +2299,22 @@ select.input {
   min-width: 44px;
 }
 
-.position-choice {
+/* A question about one card shows it beside the answers. Click it to read it. */
+.prompt-card {
   display: flex;
   align-items: flex-start;
   gap: 14px;
 }
 
-.position-choice > .card {
+.prompt-card > .card {
   flex: none;
+}
+
+.prompt-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
 }
 
 /* Reaction window */

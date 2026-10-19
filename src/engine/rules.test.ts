@@ -249,6 +249,8 @@ describe('cards', () => {
     t.play('doggy-grave-digger');
     expect(t.log(me!)).toContain('You see King Cat.');
     expect(t.prompt).toMatchObject({ kind: 'confirm', text: 'Swap your card with the set-aside card?' });
+    // The question shows the card you may swap for.
+    expect(t.s.cards[t.view(me!).prompt!.card!]!.cardId).toBe('king-cat');
     t.answer(true);
     expect(t.cardIds(`hand:${me}`)).toEqual(['king-cat']);
     expect(t.cardIds('setAside')).toEqual(['crystal-bowl']);

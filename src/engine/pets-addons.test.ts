@@ -259,6 +259,7 @@ describe('Second Litter', () => {
     expect(t.log()).toContain(`${t.name(me!)} looks at the top card of the draw pile.`);
     expect(t.view(me!).zones.deck!.known[0]?.card.cardId).toBe('king-cat');
     expect(t.prompt).toMatchObject({ kind: 'confirm' });
+    expect(t.s.cards[t.view(me!).prompt!.card!]!.cardId).toBe('king-cat');
     t.answer(true);
     expect(t.cardIds(`hand:${me}`)).toEqual(['king-cat']);
     // The next player draws the card you put back, and you know it.
@@ -313,6 +314,7 @@ describe('Second Litter', () => {
     trade.answer(a);
     expect(trade.seenInHand(me!, a!)).toEqual(['king-cat']);
     expect(trade.prompt).toMatchObject({ kind: 'confirm', text: `Trade cards with ${trade.name(a!)}?` });
+    expect(trade.s.cards[trade.view(me!).prompt!.card!]!.cardId).toBe('king-cat');
     trade.answer(true);
     expect(trade.cardIds(`hand:${me}`)).toEqual(['king-cat']);
 

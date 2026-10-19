@@ -108,6 +108,17 @@ export const guess: OpDef = {
 };
 
 /**
+ * The `card` param of a question, so the table can show the card it is about. Only a card the
+ * answering seat (self) knows.
+ */
+function shownCard(rt: Rt, ref: unknown): { card?: string } {
+  const uid = resolveValue(rt, ref);
+  if (typeof uid !== 'string') return {};
+  const home = Object.values(rt.s.zones).find((z) => z.cards.includes(uid));
+  return home && knows(rt.s, selfSeat(rt), cardOf(rt, uid), home) ? { card: uid } : {};
+}
+
+/**
  * A position in a zone, 0 is the top. For a card already in the zone (Mouse Trapper) there are
  * as many positions as cards. With `insert`, for a card going in, there is one more: the bottom.
  * `card` names the card being placed, so the question can show it.
@@ -121,15 +132,7 @@ export const choosePosition: OpDef = {
     const zone = resolveZone(rt, op.zone);
     if (!zone || (!zone.cards.length && op.insert !== true)) return 'abort';
     const positions = zone.cards.length + (op.insert === true ? 1 : 0);
-    if (frame.answer === undefined) {
-      const uid = resolveValue(rt, op.card);
-      let card: string | undefined;
-      if (typeof uid === 'string') {
-        const home = Object.values(rt.s.zones).find((z) => z.cards.includes(uid));
-        if (home && knows(rt.s, selfSeat(rt), cardOf(rt, uid), home)) card = uid;
-      }
-      return { ask: { kind: 'choosePosition', choices: positions, ...(card ? { card } : {}) } };
-    }
+    if (frame.answer === undefined) return { ask: { kind: 'choosePosition', choices: positions, ...shownCard(rt, op.card) } };
     const pos = frame.answer as number;
     setVar(rt, String(op.as), pos);
     log(rt, `You chose position ${pos + 1} of ${positions} (1 is the top).`, [selfSeat(rt)]);
@@ -178,13 +181,14 @@ export const nameCard: OpDef = {
   },
 };
 
+/** Yes or no. `card` names the card the question is about, like the one you may swap for. */
 export const confirm: OpDef = {
   status: 'ready',
-  params: { as: 'as', text: 'text' },
+  params: { as: 'as', text: 'text', card: 'var' },
   required: ['as', 'text'],
   asks: true,
   run(rt, op, frame) {
-    if (frame.answer === undefined) return { ask: { kind: 'confirm', text: interpolate(rt, String(op.text)) } };
+    if (frame.answer === undefined) return { ask: { kind: 'confirm', text: interpolate(rt, String(op.text)), ...shownCard(rt, op.card) } };
     setVar(rt, String(op.as), frame.answer === true);
     return 'next';
   },

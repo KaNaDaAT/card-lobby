@@ -482,6 +482,8 @@ function promptBar(t: T): HTMLElement | null {
   if (!p || t.game.phase !== 'round') return null;
   const source = p.combo ?? (p.source ? def(t, p.source).name : null);
   const titled = (text: string) => (source ? `${source}: ${text}` : text);
+  // The card a question is about stays in sight: the one you put back, or the one you may swap for.
+  const cardId = p.card ? t.known.get(p.card) : undefined;
   let title: string;
   let body: Child = null;
   switch (p.kind) {
@@ -545,8 +547,6 @@ function promptBar(t: T): HTMLElement | null {
       );
       break;
     case 'choosePosition': {
-      // The card you are placing stays in sight, so you know what you are putting where.
-      const cardId = p.card ? t.known.get(p.card) : undefined;
       const what = !cardId ? 'the card' : cardId === p.source ? 'it' : def(t, cardId).name;
       title = titled(`where does ${what} go? 1 is the top of the pile.`);
       const buttons: Child[] = [];
@@ -554,12 +554,7 @@ function promptBar(t: T): HTMLElement | null {
         const label = i === 0 ? '1 (top)' : i === p.choices - 1 ? `${i + 1} (bottom)` : String(i + 1);
         buttons.push(h('button', { type: 'button', class: 'btn btn-sm choice', onclick: () => answer(t, i) }, label));
       }
-      body = h(
-        'div',
-        { class: 'position-choice' },
-        cardId ? face(t, { uid: p.card!, cardId }, { size: 'md' }) : null,
-        h('div', { class: 'choices choices-dense' }, buttons),
-      );
+      body = h('div', { class: 'choices choices-dense' }, buttons);
       break;
     }
     case 'chooseCard':
@@ -589,6 +584,7 @@ function promptBar(t: T): HTMLElement | null {
       );
       break;
   }
+  if (cardId) body = h('div', { class: 'prompt-card' }, face(t, { uid: p.card!, cardId }, { size: 'md' }), h('div', { class: 'prompt-card-body' }, body));
   return h('div', { class: 'prompt-bar', role: 'group', 'aria-label': title }, h('p', { class: 'prompt-title' }, title), body);
 }
 

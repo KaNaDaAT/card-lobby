@@ -289,8 +289,9 @@ Safety rules:
      short screens. Players move into a tab beside the log. On narrow screens the seats sit
      in a grid instead of an oval.
    - In both, clicking a card in your hand opens it large with its text, with Play and Back.
-     Cards played in combos are picked instead, and one picked card shows its text. The
-     question where a card goes back (Mouse Trapper, a defused kitten) shows that card.
+     Cards played in combos are picked instead, and one picked card shows its text. A
+     question about one card shows that card: where it goes back (Mouse Trapper, a defused
+     kitten), or whether to swap for it (Doggy Grave Digger, Treasure Magpie, Haggling Hamster).
    - The room uses the whole window. On wide screens the cards grow with it, so the table fills
      the screen instead of sitting in a narrow column.
 4. **Signals** (`src/ui/events.ts` compares the view a page had with the new one): a big
