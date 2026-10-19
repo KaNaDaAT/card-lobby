@@ -1,23 +1,51 @@
 /** Lobby rules shared by the host session (which enforces them) and the lobby screen. */
+import { checkSetup } from '../engine/index';
 import { addonProblems, mergeAddons } from '../packs/merge';
 import type { LoadedPack, OptionDef, OptionValue, Pack } from '../packs/types';
 
 /** Option value meaning "use the pack's default for the player count at start". */
 export const AUTO = 'auto';
 
+/** Most copies of one card the host may put into the deck. */
+export const MAX_CARD_COUNT = 20;
+
 export interface Selection {
-  /** The pack with the selected addons applied, or null when merging failed. */
+  /** The pack with the selected addons and card counts applied, or null when merging failed. */
   pack: Pack | null;
   problems: string[];
 }
 
-export function mergeSelection(lp: LoadedPack, addons: readonly string[]): Selection {
+export function mergeSelection(lp: LoadedPack, addons: readonly string[], counts: Readonly<Record<string, number>> = {}): Selection {
   const problems = addonProblems(lp.addons, addons);
   try {
-    return { pack: mergeAddons(lp.pack, lp.addons, addons), problems };
+    return { pack: withCounts(mergeAddons(lp.pack, lp.addons, addons), counts), problems };
   } catch (err) {
     return { pack: null, problems: [err instanceof Error ? err.message : String(err), ...problems] };
   }
+}
+
+/**
+ * The pack with the copies the host picked. Only cards with a plain number as their count can
+ * change: a count that depends on the players (one kitten less than players) is part of the rules.
+ */
+export function withCounts(pack: Pack, counts: Readonly<Record<string, number>>): Pack {
+  if (!Object.keys(counts).length) return pack;
+  return {
+    ...pack,
+    cards: pack.cards.map((c) => (typeof c.count === 'number' && counts[c.id] !== undefined ? { ...c, count: counts[c.id]! } : c)),
+  };
+}
+
+/**
+ * Why the picked card counts do not work for a game of `players`, or null. Smaller rounds are
+ * checked too, since players can sit out a round.
+ */
+export function countsProblem(pack: Pack, players: number): string | null {
+  for (let n = pack.players.min; n <= Math.min(pack.players.max, Math.max(pack.players.min, players)); n++) {
+    const problem = checkSetup(pack, n);
+    if (problem) return `With these card counts and ${n} players, ${problem}.`;
+  }
+  return null;
 }
 
 /** True when `value` is allowed for the option. */

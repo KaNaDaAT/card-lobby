@@ -43,6 +43,9 @@
   few KB), so sending the whole thing on every change is simpler than diffs.
 - Every view carries a `seq`. Clients drop views older than the one they have.
 - Chat goes through the host. The host keeps the last 500 messages and sends them on join.
+  Slow mode (2 seconds by default, the host picks 0 to 60) drops a player's message that
+  comes too soon and tells only them. The host is exempt, and can clear the chat for
+  everyone. Players can clear it on their own screen.
 - Clients never run game rules. They only draw views and answer prompts.
 
 ## Rooms, codes and encryption
@@ -100,6 +103,11 @@ nothing else.
 - Below it, the game's addons as cards with image, description and a toggle. Requirements and
   conflicts are shown and enforced. The player range updates as addons change it.
 - Options declared by the pack and its addons (tie-break, tokens to win) appear as a form.
+- The host can change how many copies of each card go into the deck (0 to 20), for cards
+  whose count is a plain number. Counts that depend on the players (one kitten less than
+  players) are rules and stay. Start is blocked while the counts break round setup for the
+  players at the table. The counts are fixed when the game starts and saved with it.
+- Each card shows the icon of the game or addon it comes from, when the pack has one.
 - Everyone sees the same lobby live. Only the host can change it.
 - Players list: color avatar, name, host and you badges, connection state, pack-ready state.
 - Start is enabled only when the player count fits and every player has the pack. Otherwise

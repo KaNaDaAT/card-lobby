@@ -839,16 +839,76 @@ select.input {
   line-height: 1;
 }
 
-.card-count {
+/* The set symbol: which game or addon a card comes from. */
+.card .card-icon {
   position: absolute;
-  top: 6%;
+  top: 5%;
   right: 6%;
-  padding: 1cqw 4cqw;
-  border-radius: 99px;
-  background: rgb(29 21 48 / 0.78);
-  color: #fff;
-  font-size: 9cqw;
+  width: 22cqw;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.45));
+}
+
+.card-sm .card-icon {
+  display: none;
+}
+
+/* Copies of each card in the lobby. The host gets a stepper. */
+.count-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  scroll-snap-align: start;
+}
+
+.count-card > .card {
+  width: 100%;
+}
+
+.count-card.is-zero > .card {
+  opacity: 0.4;
+  filter: grayscale(0.8);
+}
+
+.count-label {
+  color: var(--text-2);
+  font-size: 13px;
   font-weight: 700;
+}
+
+.count-card.is-changed .count-label,
+.count-card.is-changed .stepper-value {
+  color: var(--accent);
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stepper .btn {
+  min-width: 28px;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.stepper-value {
+  min-width: 22px;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.count-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: 13px;
 }
 
 .card-name {
@@ -1082,6 +1142,23 @@ select.input {
 .chat-form {
   display: flex;
   gap: 8px;
+}
+
+.chat-form .btn {
+  min-width: 76px;
+}
+
+.chat-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-tools .input {
+  width: auto;
+  min-height: 32px;
+  padding: 0 8px;
+  font-size: 13px;
 }
 
 /* ---------- Cards on the table ---------- */
@@ -2411,7 +2488,7 @@ dialog::backdrop {
     display: none;
   }
 
-  .col-side .panel-head:not(:has(.pill)) {
+  .col-side .panel-head:not(:has(.pill, .chat-tools:not(:empty))) {
     display: none;
   }
 

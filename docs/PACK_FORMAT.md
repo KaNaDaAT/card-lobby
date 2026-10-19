@@ -49,14 +49,14 @@ uploaded). See "Addon zips" below. `npm run zip-pack -- <folder>` zips either ki
 | `description` | string | One or two sentences for the gallery |
 | `engine` | string | Lowest engine version the pack needs, like `0.1` |
 | `players` | `{ min, max }` | Player range without addons |
-| `art` | `{ cover, back, accent? }` | Image paths relative to the pack folder. `accent` is a CSS color for the lobby |
+| `art` | `{ cover, back, accent?, icon? }` | Image paths relative to the pack folder. `accent` is a CSS color for the lobby. `icon` is a small square image shown in a corner of the game's own cards, like a set symbol |
 | `options` | Option[] | Settings the host picks in the lobby |
 | `rules` | Rules | Zones, statuses, round setup, turn, showdown, scoring |
 | `cards` | Card[] | The base deck |
 | `addons` | string[] | Paths of addon files. This order is also the merge order |
 
-Image sizes: cover and addon images 1280 x 800 (16:10), cards and back 500 x 700 (5:7). SVG,
-PNG, JPG or WebP.
+Image sizes: cover and addon images 1280 x 800 (16:10), cards and back 500 x 700 (5:7), icons
+64 x 64 (square, drawn small, so bold shapes read best). SVG, PNG, JPG or WebP.
 
 Card images are illustrations only. The app draws the value, name and text on top, so an
 addon can change a card's value without new art. Keep the top-left corner and the bottom
@@ -280,6 +280,9 @@ An addon is a JSON file listed in the pack's `addons`. The host toggles addons i
 }
 ```
 
+An addon may also have an `icon` (a small square image). The cards it adds show it in a
+corner, so players can tell them from the game's own cards.
+
 Merge rules:
 
 - Addons apply in the order of the pack's `addons` list, not the order they were toggled.
@@ -312,7 +315,8 @@ my-addon/
 | `extends` | string | The pack id of the game it is for, like `"power-hungry-pets"` |
 | `author` | string | Optional. Shown to players before they download it |
 
-- Image paths are relative to the zip. Every image an addon card names must be in the zip.
+- Image paths are relative to the zip. The addon's `image` and `icon` and every image its cards
+  name must be in the zip.
 - It is merged after the game's own addons, in the order addons were uploaded. `requires` and
   `conflicts` may name the game's addons and other uploaded ones.
 - Its id must be new for that game.

@@ -106,6 +106,7 @@ my-first-addon/
   addon.json
   art/
     addon.svg
+    icon.svg
     sleepy-ferret.svg
 ```
 
@@ -124,6 +125,7 @@ folder and rename it if you have no art yet.
   "extends": "power-hungry-pets",
   "author": "The Card Lobby tutorial",
   "image": "art/addon.svg",
+  "icon": "art/icon.svg",
   "cards": {
     "add": [
       {
@@ -150,6 +152,9 @@ folder and rename it if you have no art yet.
 - `extends` is the `id` from the game's `pack.json`, here `power-hungry-pets`. It is what makes
   this an addon zip.
 - `image` is the picture in the lobby's addon list. Paths are relative to the folder.
+- `icon` is optional: a small square picture shown in a corner of every card the addon adds,
+  so players can tell a Sleepy Ferret from the game's own cards. Keep it simple, it is drawn
+  small. Big shapes and strong outlines read best.
 - The card's first two ops are Nosy Ferret's. The third is Shell Shield's `onPlay` from the
   Power Hungry Pets `pack.json`: it gives the player the `protected` status until their next
   turn. Statuses come from the game's rules, so your addon can use the game's `protected`.
@@ -337,7 +342,7 @@ Give the copy a new `id` and `name`, then change it bit by bit. The parts of `pa
 | `id`, `name`, `version`, `description`, `author` | About the game. The `id` is what addons put in `extends` |
 | `engine` | The engine version it needs, `"0.1"` |
 | `players` | `{ "min": 2, "max": 6 }` |
-| `art` | `cover` and `back` images, and an `accent` color for the page while the game is picked |
+| `art` | `cover` and `back` images, an `accent` color for the page while the game is picked, and an optional `icon` for the corner of every card |
 | `options` | Choices the host makes in the lobby, like tokens to win |
 | `rules.zones`, `rules.playerZones` | Where cards can be: a `deck`, every player's `hand` and `played` row, and any others you need |
 | `rules.roundSetup` | Ops that run at the start of each round: build the deck, shuffle, deal |

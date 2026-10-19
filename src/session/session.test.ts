@@ -44,7 +44,7 @@ function setup() {
   });
   const join = (name: string, peer = name.toLowerCase()) =>
     new ClientSession({ code: CODE, me: id(name), transport: net.join(peer) });
-  return { net, store, host, join };
+  return { net, store, host, join, advance: (ms: number) => (clock += ms) };
 }
 
 const names = (view: View | null) => view?.lobby.players.map((p) => `${p.name}${p.connected ? '' : ' (away)'}`);
@@ -79,6 +79,49 @@ describe('host and client sessions', () => {
     net.flush();
     const chat = mia.state().chat;
     expect(chat.map((m) => m.text.length)).toEqual([chat[0]!.text.length, 500, 'Mia joined.'.length]);
+  });
+
+  it('slows chat down for players, tells only the sender, and lets the host clear it', () => {
+    const { net, store, host, join, advance } = setup();
+    const tom = join('Tom');
+    const mia = join('Mia');
+    net.flush();
+    const texts = (s: { state(): { chat: { text: string }[] } }) => s.state().chat.map((m) => m.text);
+    const notice = 'Slow mode: one message every 2 seconds.';
+
+    tom.say('one');
+    net.flush();
+    tom.say('two');
+    net.flush();
+    advance(2000);
+    tom.say('three');
+    net.flush();
+    host.say('the host is never slowed');
+    host.say('really');
+    net.flush();
+    expect(texts(host).slice(-4)).toEqual(['one', 'three', 'the host is never slowed', 'really']);
+    expect(texts(tom)).toContain(notice);
+    expect(texts(mia)).not.toContain(notice);
+
+    tom.act({ kind: 'clearChat' });
+    tom.act({ kind: 'setChatCooldown', seconds: 0 });
+    net.flush();
+    expect(host.state().view?.lobby.chatCooldown).toBe(2);
+    expect(texts(host)).toContain('one');
+
+    host.act({ kind: 'setChatCooldown', seconds: 0 });
+    host.act({ kind: 'clearChat' });
+    net.flush();
+    expect(texts(host)).toEqual(['The host cleared the chat.']);
+    expect(texts(mia)).toEqual(['The host cleared the chat.']);
+    expect(mia.state().view?.lobby.chatCooldown).toBe(0);
+    tom.say('a');
+    tom.say('b');
+    net.flush();
+    expect(texts(mia).slice(-2)).toEqual(['a', 'b']);
+
+    const again = new HostSession({ code: CODE, me: id('Hana', '#f2a93b'), transport: net.join('host-again'), packs: [pets], store });
+    expect(again.state().view?.lobby.chatCooldown).toBe(0);
   });
 
   it('only lets the host change the lobby, and checks values', () => {
@@ -221,6 +264,9 @@ describe('host and client sessions', () => {
     expect(parseIntent({ kind: 'nope' })).toBeNull();
     expect(parseIntent({ kind: 'setOption', id: 'x', value: { evil: 1 } })).toBeNull();
     expect(parseIntent({ kind: 'start', extra: 1 })).toEqual({ kind: 'start' });
+    expect(parseIntent({ kind: 'setChatCooldown', seconds: 5 })).toEqual({ kind: 'setChatCooldown', seconds: 5 });
+    expect(parseIntent({ kind: 'setChatCooldown', seconds: 7 })).toBeNull();
+    expect(parseIntent({ kind: 'setCardCount', cardId: 'king-cat', count: '3' })).toBeNull();
   });
 });
 
@@ -280,6 +326,45 @@ describe('games through the session', () => {
     net.flush();
     expect(tom.state().view!.game).toBeNull();
     expect(tom.state().view!.lobby.phase).toBe('lobby');
+  });
+
+  it('lets the host change card counts, checks them, and keeps them for the game', () => {
+    const { net, store, host, tom } = gameSetup();
+    const counts = () => tom.state().view!.lobby.counts;
+    tom.act({ kind: 'setCardCount', cardId: 'crystal-bowl', count: 1 });
+    host.act({ kind: 'setCardCount', cardId: 'crystal-bowl', count: 99 });
+    host.act({ kind: 'setCardCount', cardId: 'no-such-card', count: 2 });
+    net.flush();
+    expect(counts()).toEqual({});
+
+    host.act({ kind: 'setCardCount', cardId: 'crystal-bowl', count: 8 });
+    host.act({ kind: 'setCardCount', cardId: 'king-cat', count: 0 });
+    net.flush();
+    expect(counts()).toEqual({ 'crystal-bowl': 8, 'king-cat': 0 });
+    host.act({ kind: 'setCardCount', cardId: 'crystal-bowl', count: 5 });
+    net.flush();
+    expect(counts()).toEqual({ 'king-cat': 0 });
+
+    for (const cardId of ['crystal-bowl', 'mouse-trapper', 'battle-bunny', 'shell-shield', 'snake-sorcerer']) host.act({ kind: 'setCardCount', cardId, count: 0 });
+    expect(host.state().view!.lobby.startBlocked).toMatch(/^With these card counts and 2 players, the draw pile is down to 0/);
+    host.act({ kind: 'resetCardCounts' });
+    net.flush();
+    expect(counts()).toEqual({});
+
+    host.act({ kind: 'setCardCount', cardId: 'king-cat', count: 0 });
+    host.act({ kind: 'setCardCount', cardId: 'crystal-bowl', count: 9 });
+    host.act({ kind: 'start' });
+    host.act({ kind: 'setCardCount', cardId: 'crystal-bowl', count: 2 });
+    net.flush();
+    expect(counts()).toEqual({ 'king-cat': 0, 'crystal-bowl': 9 });
+    const saved = JSON.parse(store.data!) as { game: { state: { cards: Record<string, { cardId: string }> } } };
+    const ids = Object.values(saved.game.state.cards).map((c) => c.cardId);
+    expect(ids).not.toContain('king-cat');
+    expect(ids.filter((c) => c === 'crystal-bowl')).toHaveLength(9);
+    expect(ids).toHaveLength(21 - 1 + 4);
+
+    const reloaded = new HostSession({ code: CODE, me: id('Hana', '#f2a93b'), transport: net.join('host-2'), packs: [pets], store });
+    expect(reloaded.state().view!.lobby.counts).toEqual({ 'king-cat': 0, 'crystal-bowl': 9 });
   });
 
   it('ignores answers from the wrong player', () => {

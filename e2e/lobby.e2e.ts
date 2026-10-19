@@ -24,6 +24,39 @@ test('two tabs share a lobby and chat, and the room survives a host reload', asy
   expect(errors).toEqual([]);
 });
 
+test('the host sets card counts and slow mode, and clears the chat', async ({ context, page }) => {
+  const errors: string[] = [];
+  watchErrors(page, errors, 'host');
+  const hash = await createLobby(page, 'Hana');
+  const tom = await joinTab(context, hash, '2', 'Tom', errors);
+
+  await page.click('[aria-label="One King Cat less"]');
+  await page.click('[aria-label="One Crystal Bowl more"]');
+  await expect(tom.locator('.count-note')).toHaveText('The host changed how many copies go into the deck.');
+  await expect(tom.locator('.count-card.is-zero')).toHaveCount(1);
+  await expect(tom.locator('.hero-pills')).toContainText('21 cards');
+  await page.click('.count-note button:has-text("Reset")');
+  await expect(tom.locator('.count-note')).toHaveCount(0);
+
+  await tom.fill('.chat-form input', 'one');
+  await tom.press('.chat-form input', 'Enter');
+  await expect(tom.locator('.chat-form button')).toHaveText(/^Wait \ds$/);
+  await expect(tom.locator('.chat-form button')).toHaveText('Send', { timeout: 5_000 });
+
+  await page.locator('.chat-tools select').selectOption('0');
+  await expect(tom.locator('.chat-log')).toContainText('Slow mode is off.');
+  await tom.fill('.chat-form input', 'two');
+  await tom.press('.chat-form input', 'Enter');
+  await expect(tom.locator('.chat-form button')).toHaveText('Send');
+
+  await page.click('.chat-tools button:has-text("Clear")');
+  await page.click('dialog.confirm-dialog button:has-text("Clear chat")');
+  await expect(tom.locator('.chat-log')).toHaveText('The host cleared the chat.');
+  await tom.click('.chat-tools button:has-text("Clear")');
+  await expect(tom.locator('.chat-log')).toHaveText('You cleared the chat.');
+  expect(errors).toEqual([]);
+});
+
 test('a phone gets the side panels as drawers', async ({ context, page }) => {
   const errors: string[] = [];
   const hash = await createLobby(page, 'Hana');

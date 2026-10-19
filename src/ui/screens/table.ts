@@ -9,6 +9,7 @@ import { findCombo } from '../../engine/ops/flow';
 import { showdownScore } from '../../engine/round';
 import type { GameView, PlayerView, Prompt, PromptKind, Seat, VisibleCard, ZoneView } from '../../engine/types';
 import type { LobbyView } from '../../net/protocol';
+import { cardOrigins, type CardOrigin } from '../../packs/merge';
 import { valueText, type CardDef, type LoadedPack, type Pack } from '../../packs/types';
 import { mergeSelection } from '../../session/lobby';
 import { avatar, pill } from '../components/bits';
@@ -71,6 +72,8 @@ interface T {
   fresh: Set<string>;
   /** Card ids of every card this seat can see, by uid. */
   known: Map<string, string>;
+  /** The game or addon each card id comes from. */
+  origins: Map<string, CardOrigin>;
 }
 
 const WAITING_FOR: Record<PromptKind, string> = {
@@ -86,7 +89,7 @@ const WAITING_FOR: Record<PromptKind, string> = {
 export function tableMain(ctx: RoomCtx, lobby: LobbyView, game: GameView, memo: TableMemo): Child[] {
   const lp = resolvePack(ctx, lobby);
   if (!lp) return [h('section', { class: 'panel waiting' }, h('h2', null, 'Unknown game'), h('p', { class: 'muted' }, 'This page does not have the game the host is running.'))];
-  const pack = mergeSelection(lp, lobby.addons).pack ?? lp.pack;
+  const pack = mergeSelection(lp, lobby.addons, lobby.counts).pack ?? lp.pack;
   const t: T = {
     ctx,
     lobby,
@@ -98,6 +101,7 @@ export function tableMain(ctx: RoomCtx, lobby: LobbyView, game: GameView, memo: 
     prompt: game.prompt && game.prompt.id !== memo.answered ? game.prompt : null,
     fresh: new Set(),
     known: knownCards(game),
+    origins: cardOrigins(lp.pack, lp.addons, lobby.addons),
   };
   if (game.prompt?.id !== memo.answered) memo.picked = memo.picked.filter((uid) => game.hand.some((c) => c.uid === uid));
 
@@ -143,7 +147,7 @@ function def(t: T, cardId: string): CardDef {
 function face(t: T, card: VisibleCard, opts: CardOpts = {}): HTMLElement {
   const enter = !t.memo.seen.has(card.uid);
   t.fresh.add(card.uid);
-  return cardFace(t.lp, def(t, card.cardId), { ...opts, enter });
+  return cardFace(t.lp, def(t, card.cardId), { ...opts, enter, origin: t.origins.get(card.cardId) });
 }
 
 function back(t: T, key: string, opts: CardOpts = {}): HTMLElement {
@@ -350,9 +354,11 @@ function knocksYouOut(card: CardDef): boolean {
 function openHandCard(t: T, card: VisibleCard): void {
   const d = def(t, card.cardId);
   const p = t.prompt;
-  if (p?.kind !== 'play' || !p.alone.includes(card.uid)) return showCard(t.lp, d);
+  const origin = t.origins.get(card.cardId);
+  if (p?.kind !== 'play' || !p.alone.includes(card.uid)) return showCard(t.lp, d, { origin });
   const out = knocksYouOut(d);
   showCard(t.lp, d, {
+    origin,
     note: out ? 'Playing it puts it face up in front of you: you will be out of this round.' : undefined,
     actions: [{ label: out ? `Play ${d.name} and go out` : `Play ${d.name}`, kind: out ? 'danger' : 'primary', onClick: () => answer(t, [card.uid]) }],
   });

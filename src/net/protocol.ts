@@ -4,7 +4,7 @@ import type { OptionValue, PackOffer } from '../packs/types';
 
 export type { PackOffer } from '../packs/types';
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Trystero action names. Kept short, Trystero limits their length. */
 export const ACTION = {
@@ -20,6 +20,9 @@ export const ACTION = {
 
 export const CHAT_MAX_LENGTH = 500;
 export const CHAT_HISTORY = 500;
+/** Slow mode: seconds a player waits between chat messages. The host picks one, 0 is off. */
+export const CHAT_COOLDOWNS = [0, 2, 5, 15, 60];
+export const DEFAULT_CHAT_COOLDOWN = 2;
 
 /** Largest payload each action may carry, in bytes. Anything bigger is dropped unread. */
 export const MAX_BYTES = {
@@ -69,6 +72,10 @@ export interface LobbyView {
   customAddons: PackOffer[];
   /** Why Start is disabled, or null when the host can start. */
   startBlocked: string | null;
+  /** Slow mode, in seconds between messages. The host is exempt. */
+  chatCooldown: number;
+  /** Copies of each card the host changed, by card id. Cards not listed keep the pack's count. */
+  counts: Record<string, number>;
 }
 
 export interface View {
@@ -107,7 +114,11 @@ export type Intent =
   | { kind: 'endGame' }
   | { kind: 'kickForRound'; playerId: string }
   | { kind: 'removePlayer'; playerId: string }
-  | { kind: 'assignSeat'; seatOf: string; to: string };
+  | { kind: 'assignSeat'; seatOf: string; to: string }
+  | { kind: 'clearChat' }
+  | { kind: 'setChatCooldown'; seconds: number }
+  | { kind: 'setCardCount'; cardId: string; count: number }
+  | { kind: 'resetCardCounts' };
 
 /**
  * A player's answer to a pack offer. `cached` means they have the pack loaded, from their cache

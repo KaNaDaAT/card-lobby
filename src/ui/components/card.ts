@@ -1,10 +1,11 @@
+import type { CardOrigin } from '../../packs/merge';
 import { valueText, type CardDef, type LoadedPack } from '../../packs/types';
 import { h } from '../dom';
 
 export interface CardOpts {
-  /** "x3" badge in the lobby's card list. */
-  count?: number;
   size?: 'sm' | 'md' | 'lg';
+  /** The game or addon the card comes from. Its icon sits in the top right corner. */
+  origin?: CardOrigin;
   /** Makes the card a button. Without it, clicking shows the card large with its text. */
   onClick?: () => void;
   /** Highlights a card that can be played or picked. */
@@ -27,12 +28,16 @@ function classes(base: string, opts: CardOpts): string {
     .join(' ');
 }
 
+function originIcon(lp: LoadedPack, origin: CardOrigin | undefined): HTMLElement | null {
+  return origin?.icon ? h('img', { class: 'card-icon', src: lp.asset(origin.icon), alt: '', title: origin.name, draggable: 'false' }) : null;
+}
+
 /** A card face: the pack's art with value and name drawn on top. */
 export function cardFace(lp: LoadedPack, card: CardDef, opts: CardOpts = {}): HTMLElement {
   const parts = [
     card.image ? h('img', { src: lp.asset(card.image), alt: '', loading: 'lazy', draggable: 'false' }) : null,
     card.value !== undefined ? h('span', { class: 'card-value' }, valueText(card)) : null,
-    opts.count !== undefined && opts.count > 1 ? h('span', { class: 'card-count' }, `x${opts.count}`) : null,
+    originIcon(lp, opts.origin),
     opts.note ? h('span', { class: 'card-note' }, opts.note) : null,
     h('span', { class: 'card-name' }, card.name),
   ];
@@ -42,7 +47,7 @@ export function cardFace(lp: LoadedPack, card: CardDef, opts: CardOpts = {}): HT
   }
   return h(
     'button',
-    { type: 'button', class: classes('card card-button card-inspect', opts), title: label, 'aria-label': label, onclick: () => showCard(lp, card) },
+    { type: 'button', class: classes('card card-button card-inspect', opts), title: label, 'aria-label': label, onclick: () => showCard(lp, card, { origin: opts.origin }) },
     parts,
   );
 }
@@ -64,9 +69,10 @@ export interface CardAction {
 }
 
 /** Shows one card large, with its rules text. With an action (Play), the other button is Back. */
-export function showCard(lp: LoadedPack, card: CardDef, opts: { actions?: CardAction[]; note?: string } = {}): void {
+export function showCard(lp: LoadedPack, card: CardDef, opts: { actions?: CardAction[]; note?: string; origin?: CardOrigin } = {}): void {
   const actions = opts.actions ?? [];
   const danger = actions.some((a) => a.kind === 'danger');
+  const facts = [card.value !== undefined ? `Value ${valueText(card)}` : null, opts.origin ? `From ${opts.origin.name}` : null].filter(Boolean);
   const dialog = h(
     'dialog',
     { class: 'card-dialog', 'aria-label': card.name },
@@ -76,13 +82,14 @@ export function showCard(lp: LoadedPack, card: CardDef, opts: { actions?: CardAc
       h('div', { class: 'card card-xl' }, [
         card.image ? h('img', { src: lp.asset(card.image), alt: '', draggable: 'false' }) : null,
         card.value !== undefined ? h('span', { class: 'card-value' }, valueText(card)) : null,
+        originIcon(lp, opts.origin),
         h('span', { class: 'card-name' }, card.name),
       ]),
       h(
         'div',
         { class: 'card-dialog-text' },
         h('h2', null, card.name),
-        card.value !== undefined ? h('p', { class: 'muted' }, `Value ${valueText(card)}`) : null,
+        facts.length ? h('p', { class: 'muted' }, `${facts.join('. ')}.`) : null,
         h('p', null, card.text),
         opts.note ? h('p', { class: 'card-dialog-note' }, opts.note) : null,
         h(

@@ -10,8 +10,10 @@ import type { GameState, Input, Seat } from '../engine/types';
 import { safeColor, type Identity } from '../identity';
 import {
   ACTION,
+  CHAT_COOLDOWNS,
   CHAT_HISTORY,
   CHAT_MAX_LENGTH,
+  DEFAULT_CHAT_COOLDOWN,
   MAX_BYTES,
   PROTOCOL_VERSION,
   type ChatMessage,
@@ -26,9 +28,9 @@ import {
 import type { Channel, Transport } from '../net/transport';
 import { uploadProblems, withUploads } from '../packs/custom';
 import { mergeAddons } from '../packs/merge';
-import type { LoadedAddon, LoadedPack, OptionValue, Pack, PackOffer } from '../packs/types';
+import type { CardDef, LoadedAddon, LoadedPack, OptionValue, Pack, PackOffer } from '../packs/types';
 import { validateSelection } from '../packs/validate';
-import { mergeSelection, optionValueOk, startBlocked, type Selection } from './lobby';
+import { countsProblem, MAX_CARD_COUNT, mergeSelection, optionValueOk, startBlocked, withCounts, type Selection } from './lobby';
 import type { Session, SessionState } from './types';
 
 export const NAME_MAX_LENGTH = 24;
@@ -77,7 +79,9 @@ interface Member {
 interface Game {
   packId: string;
   addons: string[];
-  /** The merged pack the game runs on. Rebuilt from packId and addons on resume. */
+  /** Card counts the host picked, fixed when the game starts. */
+  counts: Record<string, number>;
+  /** The merged pack the game runs on. Rebuilt from packId, addons and counts on resume. */
   pack: Pack;
   state: GameState;
 }
@@ -92,13 +96,19 @@ interface Snapshot {
   addons: string[];
   options: Record<string, OptionValue>;
   chat: ChatMessage[];
-  game: { packId: string; addons: string[]; state: GameState } | null;
+  /** Missing in saves from before slow mode and card counts. */
+  chatCooldown?: number;
+  counts?: Record<string, number>;
+  game: { packId: string; addons: string[]; counts?: Record<string, number>; state: GameState } | null;
 }
 
 const randomSeed = () => crypto.getRandomValues(new Uint32Array(1))[0]!;
 
 /** How often the host sends one player the same pack, so a broken client cannot loop it. */
 const MAX_TRANSFERS = 3;
+
+/** Slow mode lets a message in this much early, since messages travel at different speeds. */
+const CHAT_SLACK_MS = 300;
 
 export class HostSession implements Session {
   readonly isHost = true;
@@ -119,10 +129,16 @@ export class HostSession implements Session {
   private packId: string | null = null;
   private addons: string[] = [];
   private options: Record<string, OptionValue> = {};
+  /** Copies the host picked, by card id. Only changed cards are listed. */
+  private counts: Record<string, number> = {};
   private chat: ChatMessage[] = [];
   private game: Game | null = null;
   private seq = 0;
   private chatCounter = 0;
+  private chatCooldown = DEFAULT_CHAT_COOLDOWN;
+  /** When each member last chatted, host clock in ms, for slow mode. */
+  private lastSaid = new Map<string, number>();
+  private notices = 0;
   private ownView: View | null = null;
   /** Addons uploaded in their own zips, in upload order. */
   private uploads: LoadedAddon[] = [];
@@ -167,9 +183,11 @@ export class HostSession implements Session {
       this.packId = saved.packId;
       this.addons = saved.addons;
       this.options = saved.options;
+      this.counts = saved.counts ?? {};
       this.chat = saved.chat;
       this.seq = saved.seq;
       this.chatCounter = saved.chatCounter;
+      if (CHAT_COOLDOWNS.includes(saved.chatCooldown ?? -1)) this.chatCooldown = saved.chatCooldown!;
       this.game = this.resumeGame(saved.game);
     } else {
       this.system('Lobby created. Share the link or code to invite friends.');
@@ -373,6 +391,19 @@ export class HostSession implements Session {
       case 'assignSeat':
         changed = isHost && this.assignSeat(intent.seatOf, intent.to);
         break;
+      case 'clearChat':
+        changed = isHost && this.clearChat();
+        break;
+      case 'setChatCooldown':
+        changed = isHost && this.setChatCooldown(intent.seconds);
+        break;
+      case 'setCardCount':
+        changed = isHost && inLobby && this.setCardCount(intent.cardId, intent.count);
+        break;
+      case 'resetCardCounts':
+        changed = isHost && inLobby && Object.keys(this.counts).length > 0;
+        if (changed) this.counts = {};
+        break;
     }
     if (changed) this.broadcast();
     if (changed && (intent.kind === 'selectPack' || (intent.kind === 'toggleAddon' && intent.on))) for (const m of this.members) this.offerFiles(m);
@@ -383,6 +414,7 @@ export class HostSession implements Session {
     this.packId = packId;
     this.addons = [];
     this.options = {};
+    this.counts = {};
     this.fileStatus.clear();
     this.transfers.clear();
     return true;
@@ -453,12 +485,32 @@ export class HostSession implements Session {
     if (on) next.push(addonId);
     if (mergeSelection(lp, next).problems.length) return false;
     this.addons = next;
-    // Options an addon brought along may be gone now.
+    // Options an addon brought along may be gone now, and so may cards.
     const defs = this.selection()?.pack?.options ?? [];
     for (const id of Object.keys(this.options)) {
       const def = defs.find((d) => d.id === id);
       if (!def || !optionValueOk(def, this.options[id])) delete this.options[id];
     }
+    const cards = this.baseCards();
+    for (const [id, count] of Object.entries(this.counts)) {
+      const card = cards.find((c) => c.id === id);
+      if (typeof card?.count !== 'number' || card.count === count) delete this.counts[id];
+    }
+    return true;
+  }
+
+  /** The cards of the picked game and addons, with the pack's own counts. */
+  private baseCards(): CardDef[] {
+    const lp = this.loadedPack();
+    return (lp && mergeSelection(lp, this.addons).pack?.cards) ?? [];
+  }
+
+  private setCardCount(cardId: string, count: number): boolean {
+    const card = this.baseCards().find((c) => c.id === cardId);
+    if (typeof card?.count !== 'number' || !Number.isInteger(count) || count < 0 || count > MAX_CARD_COUNT) return false;
+    if (count === (this.counts[cardId] ?? card.count)) return false;
+    if (count === card.count) delete this.counts[cardId];
+    else this.counts[cardId] = count;
     return true;
   }
 
@@ -494,7 +546,7 @@ export class HostSession implements Session {
       },
       this.now(),
     );
-    this.game = { packId: lp.key, addons: [...this.addons], pack: selection.pack, state };
+    this.game = { packId: lp.key, addons: [...this.addons], counts: { ...this.counts }, pack: selection.pack, state };
     this.system(`The game begins: ${selection.pack.name}.`);
     return true;
   }
@@ -550,10 +602,40 @@ export class HostSession implements Session {
   private addChat(from: Member, raw: unknown): void {
     if (typeof raw !== 'string') return;
     const text = raw.trim().slice(0, CHAT_MAX_LENGTH);
-    if (!text) return;
+    if (!text || this.tooSoon(from)) return;
     this.pushChat({ id: this.nextChatId(), from: from.playerId, name: from.name, text, at: this.now() });
     this.save();
     this.notify();
+  }
+
+  /** Slow mode. A message that comes too soon is dropped, and only its sender hears why. */
+  private tooSoon(from: Member): boolean {
+    if (from === this.members[0] || !this.chatCooldown) return false;
+    const now = this.now();
+    const last = this.lastSaid.get(from.playerId);
+    if (last !== undefined && now - last < this.chatCooldown * 1000 - CHAT_SLACK_MS) {
+      const text = `Slow mode: one message every ${this.chatCooldown} seconds.`;
+      if (from.peerId) void this.out.chat.send({ messages: [{ id: `n${now}-${++this.notices}`, from: 'system', name: '', text, at: now }] }, from.peerId);
+      return true;
+    }
+    this.lastSaid.set(from.playerId, now);
+    return false;
+  }
+
+  /** Empties the chat for everyone. Clients replace what they have with the new history. */
+  private clearChat(): boolean {
+    this.chat = [{ id: this.nextChatId(), from: 'system', name: '', text: 'The host cleared the chat.', at: this.now() }];
+    for (const m of this.members) {
+      if (m.peerId && m !== this.members[0]) void this.out.chat.send({ messages: this.chat, history: true }, m.peerId);
+    }
+    return true;
+  }
+
+  private setChatCooldown(seconds: number): boolean {
+    if (!CHAT_COOLDOWNS.includes(seconds) || seconds === this.chatCooldown) return false;
+    this.chatCooldown = seconds;
+    this.system(seconds ? `Slow mode: one message every ${seconds} seconds.` : 'Slow mode is off.');
+    return true;
   }
 
   private system(text: string): void {
@@ -590,7 +672,7 @@ export class HostSession implements Session {
 
   private selection(): Selection | null {
     const lp = this.loadedPack();
-    return lp ? mergeSelection(lp, this.addons) : null;
+    return lp ? mergeSelection(lp, this.addons, this.counts) : null;
   }
 
   /** Members who would get a seat if the game started now, in seat order. Who declined the pack watches. */
@@ -605,8 +687,11 @@ export class HostSession implements Session {
     return seat >= 0 ? seat : null;
   }
 
-  /** Validation errors for the current selection, cached per pack and addon set. */
-  private packProblems(): string[] {
+  /**
+   * Validation errors for the current selection, cached per pack and addon set. Changed card
+   * counts are checked for the players who would sit down.
+   */
+  private packProblems(selection: Selection | null, players: number): string[] {
     const lp = this.loadedPack();
     if (!lp) return [];
     const uploads = (lp.uploads ?? []).map((u) => u.key).join(',');
@@ -616,14 +701,23 @@ export class HostSession implements Session {
       errors = validateSelection(lp, this.addons);
       this.validation.set(key, errors);
     }
-    return errors.length ? [`This game has a problem. ${errors[0]}`] : [];
+    if (errors.length) return [`This game has a problem. ${errors[0]}`];
+    if (!Object.keys(this.counts).length || !selection?.pack) return [];
+    const countsKey = `${key}|${JSON.stringify(this.counts)}|${players}`;
+    let problems = this.validation.get(countsKey);
+    if (!problems) {
+      const problem = countsProblem(selection.pack, players);
+      problems = problem ? [problem] : [];
+      this.validation.set(countsKey, problems);
+    }
+    return problems;
   }
 
   private startProblem(selection: Selection | null, seated: Member[]): string | null {
     return startBlocked(
       selection,
       seated.map((m) => ({ playerId: m.playerId, name: m.name, connected: m.peerId !== null, packReady: this.packStatusOf(m) === 'ready' })),
-      this.packProblems(),
+      this.packProblems(selection, seated.length),
     );
   }
 
@@ -661,6 +755,8 @@ export class HostSession implements Session {
         .map((f) => f.offer)
         .filter((o) => o.kind === 'addon'),
       startBlocked: game ? this.nextRoundProblem(game.state) : this.startProblem(selection, this.seated(selection)),
+      chatCooldown: this.chatCooldown,
+      counts: { ...(game?.counts ?? this.counts) },
     };
   }
 
@@ -720,7 +816,9 @@ export class HostSession implements Session {
       addons: this.addons,
       options: this.options,
       chat: this.chat,
-      game: game ? { packId: game.packId, addons: game.addons, state: game.state } : null,
+      chatCooldown: this.chatCooldown,
+      counts: this.counts,
+      game: game ? { packId: game.packId, addons: game.addons, counts: game.counts, state: game.state } : null,
     };
     this.store.save(JSON.stringify(snapshot));
   }
@@ -741,7 +839,8 @@ export class HostSession implements Session {
     // A game whose uploaded addon is gone cannot go on.
     if (!saved || !lp || !saved.addons.every((id) => lp.addons.some((a) => a.id === id))) return null;
     try {
-      const game: Game = { ...saved, pack: mergeAddons(lp.pack, lp.addons, saved.addons) };
+      const counts = saved.counts ?? {};
+      const game: Game = { ...saved, counts, pack: withCounts(mergeAddons(lp.pack, lp.addons, saved.addons), counts) };
       for (const p of game.state.players) p.connected = p.playerId === this.playerId;
       return game;
     } catch {
@@ -809,6 +908,13 @@ export function parseIntent(data: unknown): Intent | null {
     case 'nextRound':
     case 'rematch':
     case 'endGame':
+    case 'clearChat':
+      return { kind: d.kind };
+    case 'setChatCooldown':
+      return typeof d.seconds === 'number' && CHAT_COOLDOWNS.includes(d.seconds) ? { kind: 'setChatCooldown', seconds: d.seconds } : null;
+    case 'setCardCount':
+      return isStr(d.cardId) && typeof d.count === 'number' ? { kind: 'setCardCount', cardId: d.cardId, count: d.count } : null;
+    case 'resetCardCounts':
       return { kind: d.kind };
     case 'react':
       return isStr(d.uid, 64) ? { kind: 'react', uid: d.uid } : null;

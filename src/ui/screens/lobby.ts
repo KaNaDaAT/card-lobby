@@ -7,9 +7,9 @@ import type { Identity } from '../../identity';
 import type { LobbyView } from '../../net/protocol';
 import { resolveCount } from '../../packs/count';
 import { withUploads } from '../../packs/custom';
-import { addonProblems } from '../../packs/merge';
-import type { Count, LoadedAddon, LoadedPack, OptionDef, OptionValue } from '../../packs/types';
-import { AUTO, mergeSelection } from '../../session/lobby';
+import { addonProblems, cardOrigins } from '../../packs/merge';
+import type { Count, LoadedAddon, LoadedPack, OptionDef, OptionValue, Pack } from '../../packs/types';
+import { AUTO, MAX_CARD_COUNT, mergeSelection } from '../../session/lobby';
 import type { HostSession } from '../../session/host';
 import type { Session } from '../../session/types';
 import { avatar, pill, section } from '../components/bits';
@@ -126,17 +126,55 @@ function describeCount(count: Count): string {
     .join(', ');
 }
 
+/**
+ * The cards of the game, with how many copies go into the deck. The host changes the copies of
+ * cards with a fixed count. Counts that depend on the players stay as the pack says.
+ */
+function cardStrip(ctx: RoomCtx, lobby: LobbyView, lp: LoadedPack, shown: Pack, players: number): Child[] {
+  const editable = ctx.session.isHost;
+  const changed = Object.keys(lobby.counts).length > 0;
+  const origins = cardOrigins(lp.pack, lp.addons, lobby.addons);
+  const cards = [...shown.cards]
+    .sort((a, b) => (a.value ?? 0) - (b.value ?? 0))
+    .map((c) => {
+      const n = safeCount(c.count, players);
+      const face = cardFace(lp, c, { origin: origins.get(c.id) });
+      const cls = `count-card${n === 0 ? ' is-zero' : ''}${lobby.counts[c.id] !== undefined ? ' is-changed' : ''}`;
+      if (!editable || typeof c.count !== 'number' || n === null) return h('div', { class: cls }, face, h('span', { class: 'count-label' }, n === 0 ? 'None' : `x${n ?? '?'}`));
+      const set = (count: number) => ctx.session.act({ kind: 'setCardCount', cardId: c.id, count });
+      return h(
+        'div',
+        { class: cls },
+        face,
+        h(
+          'div',
+          { class: 'stepper', role: 'group', 'aria-label': `Copies of ${c.name}` },
+          h('button', { type: 'button', class: 'btn btn-xs', 'aria-label': `One ${c.name} less`, disabled: n <= 0, onclick: () => set(n - 1) }, '-'),
+          h('span', { class: 'stepper-value' }, n),
+          h('button', { type: 'button', class: 'btn btn-xs', 'aria-label': `One ${c.name} more`, disabled: n >= MAX_CARD_COUNT, onclick: () => set(n + 1) }, '+'),
+        ),
+      );
+    });
+  const note = !changed
+    ? editable
+      ? h('p', { class: 'muted small' }, 'Use - and + to change how many copies go into the deck.')
+      : null
+    : h(
+        'p',
+        { class: 'count-note' },
+        editable ? 'You changed how many copies go into the deck.' : 'The host changed how many copies go into the deck.',
+        editable ? h('button', { type: 'button', class: 'btn btn-ghost btn-xs', onclick: () => ctx.session.act({ kind: 'resetCardCounts' }) }, 'Reset') : null,
+      );
+  return [h('div', { class: 'card-strip' }, cards), note];
+}
+
 function gameDetail(ctx: RoomCtx, lobby: LobbyView, lp: LoadedPack): HTMLElement {
   const editable = ctx.session.isHost;
-  const { pack, problems } = mergeSelection(lp, lobby.addons);
+  const { pack, problems } = mergeSelection(lp, lobby.addons, lobby.counts);
   const shown = pack ?? lp.pack;
   // Preview counts for the lobby size, clamped to what the pack allows.
   const players = Math.min(shown.players.max, Math.max(shown.players.min, seatedCount(lobby)));
   const deck = shown.cards.reduce((sum, c) => sum + (safeCount(c.count, players) ?? 0), 0);
-
-  const cards = [...shown.cards]
-    .sort((a, b) => (a.value ?? 0) - (b.value ?? 0))
-    .map((c) => cardFace(lp, c, { count: safeCount(c.count, players) ?? undefined }));
 
   const addons = lp.addons
     .filter((a) => editable || lobby.addons.includes(a.id))
@@ -211,7 +249,7 @@ function gameDetail(ctx: RoomCtx, lobby: LobbyView, lp: LoadedPack): HTMLElement
     h('p', { class: 'detail-desc' }, shown.description),
     shown.author ? h('p', { class: 'muted small' }, `By ${shown.author}`) : null,
     problems.length && !editable ? h('p', { class: 'form-error' }, problems[0]) : null,
-    section('Cards', h('div', { class: 'card-strip' }, cards)),
+    section('Cards', cardStrip(ctx, lobby, lp, shown, players)),
     addons.length ? section('Addons', h('div', { class: 'addons' }, addons)) : null,
     options.length ? section('Options', h('div', { class: 'options' }, options)) : null,
     h(

@@ -10,7 +10,8 @@
   "art": {
     "cover": "art/cover.svg",
     "back": "art/back.svg",
-    "accent": "#ff7b54"
+    "accent": "#ff7b54",
+    "icon": "art/icon.svg"
   },
   "options": [
     {
