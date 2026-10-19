@@ -268,17 +268,25 @@ function center(t: T, cls = 'center', compact = false): HTMLElement {
       } else {
         cards = h('div', { class: 'zone-stack' }, back(t, `zone:${id}`, { size: 'md' }), h('span', { class: 'zone-count' }, zone.count));
       }
-      const knownList =
-        hidden && zone.count > 1 && zone.known.length
-          ? h(
-              'p',
-              { class: 'zone-known' },
-              `You know: ${zone.known.map((k) => `${def(t, k.card.cardId).name} at ${k.index + 1}`).join(', ')}`,
-            )
-          : null;
+      const knownList = hidden && zone.count > 1 && zone.known.length ? h('p', { class: 'zone-known' }, knownText(t, zone)) : null;
       return h('div', { class: 'zone' }, h('span', { class: 'zone-label' }, zoneTitle(t, id)), cards, knownList);
     }),
   );
+}
+
+const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
+
+/**
+ * The cards you know in a hidden pile, top first. Top cards in a row read as a plain list, a
+ * card further down says how far. The engine only sends positions you can know.
+ */
+function knownText(t: T, zone: ZoneView): string {
+  const name = (cardId: string) => def(t, cardId).name;
+  if (zone.known.every((k, i) => k.index === i)) {
+    const names = zone.known.map((k) => name(k.card.cardId)).join(', ');
+    return zone.known.length === 1 ? `The top card you saw: ${names}` : `The top cards you saw: ${names}`;
+  }
+  return `You know: ${zone.known.map((k) => `${name(k.card.cardId)} (${ordinal(k.index + 1)} from the top)`).join(', ')}`;
 }
 
 /** Your hand: cards to click when you are asked to play, cards to read otherwise. */
@@ -467,13 +475,21 @@ function promptBar(t: T): HTMLElement | null {
       );
       break;
     case 'choosePosition': {
-      title = titled('where does the card go? 1 is the top of the pile.');
+      // The card you are placing stays in sight, so you know what you are putting where.
+      const cardId = p.card ? t.known.get(p.card) : undefined;
+      const what = !cardId ? 'the card' : cardId === p.source ? 'it' : def(t, cardId).name;
+      title = titled(`where does ${what} go? 1 is the top of the pile.`);
       const buttons: Child[] = [];
       for (let i = 0; i < p.choices; i++) {
         const label = i === 0 ? '1 (top)' : i === p.choices - 1 ? `${i + 1} (bottom)` : String(i + 1);
         buttons.push(h('button', { type: 'button', class: 'btn btn-sm choice', onclick: () => answer(t, i) }, label));
       }
-      body = h('div', { class: 'choices choices-dense' }, buttons);
+      body = h(
+        'div',
+        { class: 'position-choice' },
+        cardId ? face(t, { uid: p.card!, cardId }, { size: 'md' }) : null,
+        h('div', { class: 'choices choices-dense' }, buttons),
+      );
       break;
     }
     case 'chooseCard':

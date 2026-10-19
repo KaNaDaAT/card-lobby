@@ -112,6 +112,24 @@ describe('cards', () => {
     expect(t.log(a!)).toContain(`${t.name(me!)} puts it back somewhere in the draw pile.`);
   });
 
+  it('Mouse Trapper: a card put back in secret makes the others forget where their known cards are', () => {
+    const t = table();
+    const [me, a, b] = t.order;
+    t.rig(`hand:${me}`, ['mouse-trapper', 'crystal-bowl']);
+    t.rig('deck', ['king-cat']);
+    t.play('mouse-trapper');
+    t.answer(2);
+    expect(t.view(me!).zones.deck!.known.map((k) => [k.index, k.card.cardId])).toEqual([[1, 'king-cat']]);
+    t.rig(`hand:${a}`, ['mouse-trapper', 'crystal-bowl']);
+    t.play('mouse-trapper');
+    t.answer(t.s.zones.deck!.cards.length - 1);
+    // The King Cat moved up and the next player drew it. Neither may show.
+    expect(t.cardIds(`hand:${b}`)).toContain('king-cat');
+    expect(t.view(me!).zones.deck!.known).toEqual([]);
+    expect(t.seenInHand(me!, b!)).toEqual([]);
+    expect(t.view(a!).zones.deck!.known.map((k) => k.index)).toEqual([t.s.zones.deck!.cards.length - 1]);
+  });
+
   it('Mouse Trapper: an empty draw pile means nothing happens', () => {
     const t = table();
     const [me] = t.order;

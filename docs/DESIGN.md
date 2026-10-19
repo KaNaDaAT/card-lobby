@@ -183,6 +183,12 @@ start of the owner's turn.
   hidden.
 - Peeking adds the viewer to `knownBy`. Moving a card inside a hidden zone keeps knowledge
   (Mouse Trapper knows where it put the card).
+- A card put into a hidden zone at a chosen or random position (Mouse Trapper, a defused
+  kitten) moves the cards below it down by one. So everyone but the mover forgets every card
+  in that zone: known positions, or a known card turning up in someone's hand, would tell
+  where it went. A random or chosen card taken from a hand (Pair, Favor) does the same for
+  that hand. The simulation tries several answers to every position question and checks that
+  nobody else's view changes.
 - Shuffling a zone clears `knownBy` for its cards and gives them new uids, so nobody can track
   a card through a shuffle by its id.
 - The simulation test checks that no view ever contains a hidden card its seat does not know.
@@ -275,7 +281,8 @@ Safety rules:
      short screens. Players move into a tab beside the log. On narrow screens the seats sit
      in a grid instead of an oval.
    - In both, clicking a card in your hand opens it large with its text, with Play and Back.
-     Cards played in combos are picked instead, and one picked card shows its text.
+     Cards played in combos are picked instead, and one picked card shows its text. The
+     question where a card goes back (Mouse Trapper, a defused kitten) shows that card.
 4. **Round end**: hands revealed, the winner, tokens. **Game end**: winner and rematch.
 
 ## Testing

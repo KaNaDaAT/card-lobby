@@ -51,6 +51,10 @@ a Defuse. The last player left wins. One game is one round. Rematch starts a new
   for you (**Interpretation**, you would always play it), and you put the kitten back anywhere
   in the draw pile. Position 1 is the top. Only you know where it went. Without a Defuse you
   explode: you are out, and your cards go face up in front of you.
+- **After a kitten goes back**: everyone else forgets what they knew of the draw pile (from
+  See the Future), since the cards below the kitten moved down by one and their places would
+  tell where it went. What they saw stays in their game log. (**House rule.** At a real table
+  you would only remember the order, not the places.)
 - **Defuse**: only used against an Exploding Kitten. It cannot be played on its own.
 - **Nope**: play it while a play's Nope window is open, on anyone's turn, yours included. The
   play does nothing, but its cards stay discarded. A Nope can be Noped, which brings the play
@@ -61,7 +65,8 @@ a Defuse. The last player left wins. One game is one round. Rematch starts a new
   2 turns. Attacks do not add up. (**Interpretation.** That is the first edition's rule.
   Later editions stack them.)
 - **Skip**: ends one turn without drawing. Under an Attack it ends one of the two turns.
-- **Favor**: pick a player who has cards. They choose which card they give you.
+- **Favor**: pick a player who has cards. They choose which card they give you. Nobody else
+  learns which card it was: whoever knew a card in their hand forgets it.
 - **Shuffle**: shuffles the draw pile. Nobody knows where any card is afterwards, including
   kittens someone put back.
 - **See the Future**: you see the top 3 cards, top first. Others only see that you looked.
@@ -72,7 +77,8 @@ a Defuse. The last player left wins. One game is one round. Rematch starts a new
 Any matching cards count, not only cats (two Skips are a pair too). A combo's cards do not do
 their own action.
 
-- **Pair** (2 alike): pick a player with cards and take a random card from them.
+- **Pair** (2 alike): pick a player with cards and take a random card from them. As with
+  Favor, nobody else learns which card it was.
 - **Three of a kind** (3 alike): pick a player with cards and name a card. If they have it, they
   give it to you and everyone hears what it was. If not, nothing happens.
 - **Five different** (5 cards, all different): take any card from the discard pile, including

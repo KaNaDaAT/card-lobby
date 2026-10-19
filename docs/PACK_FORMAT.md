@@ -192,7 +192,7 @@ the current effect is skipped. The card still counts as played.
 |---|---|---|
 | `buildDeck` | `to`, `only?`, `except?` (card ids) | M2. Puts every card of the merged pack into a zone, counts resolved for this round. M7: `only` or `except` pick some of them |
 | `shuffle` | `zone` | M2. Also clears knowledge and renews uids of the cards in it |
-| `move` | `from`, `to`, `count = 1` (or `all`), `faceUp?`, `at? = top / bottom / random / $var`, `card? = $var`, `match?` (card id), `secret?` | M2. Moves cards from the top of `from`, or one specific card. `from` may name several zones (`hand:$group`). M7: `match` moves the first card with that id. `secret` leaves only the mover knowing where the card went |
+| `move` | `from`, `to`, `count = 1` (or `all`), `faceUp?`, `at? = top / bottom / random / $var`, `card? = $var`, `match?` (card id), `secret?` | M2. Moves cards from the top of `from`, or one specific card. `from` may name several zones (`hand:$group`). M7: `match` moves the first card with that id. `secret` leaves only the mover knowing where the card went. A move into a hidden zone at a chosen or random position is always secret, and everyone else forgets the cards in that zone, since their places would tell where it went |
 | `deal` | `from`, `to` (players), `count = 1` | M2. Deals one card at a time, round-robin |
 | `draw` | `who`, `count = 1`, `fallback?` (zone) | M2. From `deck` into the hand. Uses `fallback` when the deck is empty. Fires `onDraw` |
 
@@ -213,7 +213,7 @@ the current effect is skipped. The card still counts as played.
 | `choosePlayer` | `as`, `from`, `except?`, `holding?` (card id), `withCards?`, `auto?`, `includeProtected?` | M2. `auto` skips the prompt when exactly one player fits. Untargetable players are skipped unless `includeProtected`. M7: `withCards` skips players with an empty hand. `except` leaves out players, like one chosen before (`"except": "$a"`) |
 | `selectPlayers` | `as`, `from`, `except?`, `withCards?`, `includeProtected?` | M2. No prompt. Stores every fitting player |
 | `guess` | `as`, `exclude?` (values) | M2. Pick a card value present in the merged deck. Logged for everyone |
-| `choosePosition` | `zone`, `as`, `insert?` | M2. 0 is the top. M7: `insert` adds the bottom, for a card going into the zone |
+| `choosePosition` | `zone`, `as`, `insert?`, `card?` ($var) | M2. 0 is the top. M7: `insert` adds the bottom, for a card going into the zone. `card` names the card being placed, so the question shows it (only to a player who knows it) |
 | `confirm` | `as`, `text` | M2. Yes or no |
 | `chooseCard` | `as`, `from` (zone), `by? = self`, `text?` | M7. `by` picks a card from the zone (Favor: the target picks from their own hand). Stores its uid. `text` replaces the prompt's "pick a card." and may use `{self}` |
 | `nameCard` | `as` | M7. Names a card id from this round's deck. Logged for everyone |
@@ -233,7 +233,7 @@ the current effect is skipped. The card still counts as played.
 | `if` | `cond`, `then`, `else?` | M2 |
 | `log` | `text`, `to? = all` | M2 |
 | `flag` | `id`, `to? = true` (or `false`, `"toggle"`) | Turns a round flag from `rules.flags` on or off |
-| `take` | `from`, `pick` (`random` or `$var`), `to? = hand:self` | M7. Moves one card: a random one, the uid from `chooseCard`, or the first card with the id from `nameCard`. A named card that is not there ends the effect |
+| `take` | `from`, `pick` (`random` or `$var`), `to? = hand:self` | M7. Moves one card: a random one, the uid from `chooseCard`, or the first card with the id from `nameCard`. A named card that is not there ends the effect. A random or chosen card from a hidden zone leaves everyone but the taker and the zone's owner forgetting that zone's cards |
 | `cancel` | `what: stackTop` | M7. Only in `onReact`. Cancels the play in the reaction window, or brings it back if it was canceled |
 | `reorder` | `zone`, `count` | Future (Alter the Future) |
 

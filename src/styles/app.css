@@ -2007,6 +2007,16 @@ select.input {
   min-width: 44px;
 }
 
+.position-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.position-choice > .card {
+  flex: none;
+}
+
 /* Reaction window */
 
 .window {

@@ -233,6 +233,18 @@ export function know(rt: Rt, uid: string, seats: readonly Seat[]): void {
 }
 
 /**
+ * Everyone outside `keep` forgets the cards in a zone, after a change there they could not
+ * follow (a card put back at a secret position, a card taken at random). Remembering them
+ * would let a seat read the hidden change from where the cards went.
+ */
+export function forget(rt: Rt, zone: Zone, keep: readonly Seat[]): void {
+  for (const uid of zone.cards) {
+    const card = cardOf(rt, uid);
+    card.knownBy = card.knownBy.filter((seat) => keep.includes(seat));
+  }
+}
+
+/**
  * Moves one card. Whoever held it in an owner zone keeps knowing it, and a card leaving a
  * public zone stays known to everyone, since everyone saw it there.
  */

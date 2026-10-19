@@ -4,6 +4,7 @@ import {
   allSeats,
   cardName,
   cardValue,
+  forget,
   handOf,
   isIn,
   know,
@@ -214,7 +215,8 @@ export const status: OpDef = {
 /**
  * Moves one card from a zone to another, your hand by default. `pick` is `random`, or a variable
  * holding a card uid (from chooseCard) or a card id (from nameCard). A named card the zone does
- * not hold ends the effect. Everyone hears what was named, nobody else learns a random card.
+ * not hold ends the effect. Everyone hears what was named, nobody else learns a random or
+ * chosen card: from a hidden hand, others forget its cards, since they cannot tell which one left.
  */
 export const take: OpDef = {
   status: 'ready',
@@ -247,6 +249,11 @@ export const take: OpDef = {
     moveCard(rt, uid, from, to, 'bottom');
     const card = cardName(rt, uid);
     const taker = to.owner ?? self;
+    if (!named && from.visibility !== 'public') {
+      const keep = [self, taker, ...(from.owner !== undefined ? [from.owner] : [])];
+      forget(rt, from, keep);
+      rt.s.cards[uid]!.knownBy = rt.s.cards[uid]!.knownBy.filter((seat) => keep.includes(seat));
+    }
     if (from.visibility === 'public') {
       log(rt, `${nameOf(rt, taker)} takes ${card} from ${zoneLabel(rt, from)}.`);
     } else if (from.owner !== undefined) {

@@ -116,7 +116,7 @@
       "text": "Look at the top card of the draw pile, then put it back anywhere in the pile.",
       "onPlay": [
         { "op": "peek", "zone": "deck", "count": 1, "as": "top" },
-        { "op": "choosePosition", "zone": "deck", "as": "pos" },
+        { "op": "choosePosition", "zone": "deck", "as": "pos", "card": "$top" },
         { "op": "move", "card": "$top", "from": "deck", "to": "deck", "at": "$pos" },
         { "op": "log", "text": "{self} puts it back somewhere in the draw pile." }
       ]

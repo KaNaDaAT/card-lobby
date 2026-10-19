@@ -104,7 +104,12 @@ export type Prompt =
     })
   | (PromptBase & { kind: 'choosePlayer'; choices: Seat[] })
   | (PromptBase & { kind: 'guess'; choices: number[] })
-  | (PromptBase & { kind: 'choosePosition'; choices: number })
+  | (PromptBase & {
+      kind: 'choosePosition';
+      choices: number;
+      /** The card going into the zone, when the answering seat knows it. */
+      card?: string;
+    })
   | (PromptBase & { kind: 'confirm' })
   | (PromptBase & { kind: 'chooseCard'; choices: string[] })
   | (PromptBase & { kind: 'nameCard'; choices: string[] });

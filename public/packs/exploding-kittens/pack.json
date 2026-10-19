@@ -97,7 +97,7 @@
           "then": [
             { "op": "move", "match": "defuse", "from": "hand:self", "to": "discard" },
             { "op": "log", "text": "{self} defuses it." },
-            { "op": "choosePosition", "zone": "deck", "as": "pos", "insert": true },
+            { "op": "choosePosition", "zone": "deck", "as": "pos", "insert": true, "card": "$card" },
             { "op": "move", "card": "$card", "from": "played:self", "to": "deck", "at": "$pos", "secret": true },
             { "op": "log", "text": "{self} puts the kitten back into the draw pile, somewhere." }
           ],

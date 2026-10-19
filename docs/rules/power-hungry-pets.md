@@ -73,7 +73,8 @@ pile.
 - **Battle Bunny**: only you and the chosen player see both cards. The loser's card is then
   face up anyway.
 - **Mouse Trapper**: you choose the position, top is position 1. Only you know where it went.
-  Nothing happens if the draw pile is empty.
+  Anyone else who knew cards in the draw pile (from an earlier Mouse Trapper) forgets them,
+  since their places would tell where it went. Nothing happens if the draw pile is empty.
 - **Crystal Bowl**: the guess is public. A wrong guess only tells everyone it was wrong.
   0 is a valid guess.
 - **No valid target**: if a card needs a player and every other player is out or protected,

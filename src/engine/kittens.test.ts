@@ -158,6 +158,22 @@ describe('Exploding Kitten', () => {
     expect(t.s.turn.seat).toBe(a);
   });
 
+  it('going back in secret makes the others forget the draw pile, so known cards cannot show where it went', () => {
+    const t = table();
+    const [me, a] = t.order;
+    t.rig(`hand:${me}`, hand('see-the-future'));
+    t.rig('deck', ['skip', 'exploding-kitten', 'nope', 'tacocat']);
+    t.play('see-the-future');
+    t.closeWindow();
+    t.pass();
+    expect(t.view(me!).zones.deck!.known.map((k) => [k.index, k.card.cardId])).toEqual([[0, 'exploding-kitten'], [1, 'nope']]);
+    t.pass();
+    expect(t.prompt).toMatchObject({ kind: 'choosePosition', to: a });
+    t.answer(0);
+    expect(t.view(me!).zones.deck!.known).toEqual([]);
+    expect(t.view(a!).zones.deck!.known.map((k) => [k.index, k.card.cardId])).toEqual([[0, 'exploding-kitten']]);
+  });
+
   it('can go back to the very bottom', () => {
     const t = table();
     t.rig('deck', ['exploding-kitten']);
@@ -208,6 +224,27 @@ describe('taking cards', () => {
     t.answer(a);
     expect(t.cardIds(`hand:${me}`)).toHaveLength(7);
     expect(t.cardIds(`hand:${a}`)).toHaveLength(7);
+  });
+
+  it('Pair: a player who knew a card in the target hand forgets it, since nobody saw which card went', () => {
+    const t = table();
+    const [me, a, b] = t.order;
+    t.rig(`hand:${me}`, hand('favor'));
+    t.rig(`hand:${a}`, hand('beard-cat'));
+    t.rig(`hand:${b}`, hand('tacocat', 'tacocat'));
+    t.rig('deck', ['hairy-potato-cat', 'hairy-potato-cat', 'rainbow-ralphing-cat']);
+    t.play('favor');
+    t.closeWindow();
+    t.answer(a);
+    t.answer(t.s.zones[`hand:${a}`]!.cards.find((u) => t.s.cards[u]!.cardId === 'beard-cat')!);
+    t.pass();
+    t.pass();
+    expect(t.seenInHand(a!, me!)).toEqual(['beard-cat']);
+    t.playCards(['tacocat', 'tacocat']);
+    t.closeWindow();
+    t.answer(me);
+    expect(t.seenInHand(a!, me!)).toEqual([]);
+    expect(t.seenInHand(a!, b!)).toEqual([]);
   });
 
   it('Three of a kind: names a card, which the target gives if they have it', () => {
