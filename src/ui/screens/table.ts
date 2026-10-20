@@ -11,7 +11,7 @@ import type { GameView, PlayerView, Prompt, PromptKind, Seat, VisibleCard, ZoneV
 import type { LobbyView } from '../../net/protocol';
 import { cardOrigins, type CardOrigin } from '../../packs/merge';
 import { valueText, type CardDef, type LoadedPack, type Pack } from '../../packs/types';
-import { mergeSelection } from '../../session/lobby';
+import { mergeSelection, tweaksOf } from '../../session/lobby';
 import { avatar, pill } from '../components/bits';
 import { cardBack, cardFace, showCard, type CardOpts } from '../components/card';
 import { confirmDialog } from '../components/dialog';
@@ -117,7 +117,7 @@ const WAITING_FOR: Record<PromptKind, string> = {
 export function tableMain(ctx: RoomCtx, lobby: LobbyView, game: GameView, memo: TableMemo): Child[] {
   const lp = resolvePack(ctx, lobby);
   if (!lp) return [h('section', { class: 'panel waiting' }, h('h2', null, 'Unknown game'), h('p', { class: 'muted' }, 'This page does not have the game the host is running.'))];
-  const pack = mergeSelection(lp, lobby.addons, lobby.counts).pack ?? lp.pack;
+  const pack = mergeSelection(lp, lobby.addons, tweaksOf(lobby)).pack ?? lp.pack;
   if (memo.view !== game) {
     memo.events = tableEvents(memo.view, game);
     memo.eventsAt = Date.now();
@@ -154,11 +154,11 @@ export function tableMain(ctx: RoomCtx, lobby: LobbyView, game: GameView, memo: 
           'section',
           { class: 'panel table' },
           statusBar(t),
-          windowBanner(t),
           result(t),
           h('div', { class: 'seats' }, opponentOrder(t).map((p) => seat(t, p))),
           center(t),
-          promptBar(t),
+          // One slot keeps its place, so the table does not jump when a question or a window comes and goes.
+          h('div', { class: 'ask-slot' }, promptBar(t) ?? windowBanner(t) ?? waitingNote(t)),
           game.you !== null ? yourArea(t, game.players[game.you]!) : watching,
           splash(t),
         );
@@ -361,10 +361,12 @@ function yourHand(t: T, size: CardOpts['size'] = t.game.hand.length > 5 ? 'md' :
   const playing = p?.kind === 'play';
   const multi = playing && p.max > 1;
   return t.game.hand.map((card) => {
-    if (!playing) return face(t, card, { size });
+    const seenBy = card.seenBy.map((seat) => name(t, seat));
+    if (!playing) return face(t, card, { size, seenBy });
     const picked = t.memo.picked.includes(card.uid);
     return face(t, card, {
       size,
+      seenBy,
       active: multi ? picked : true,
       onClick: () => (multi ? togglePick(t, card.uid) : openHandCard(t, card)),
     });
@@ -482,6 +484,8 @@ function promptBar(t: T): HTMLElement | null {
   if (!p || t.game.phase !== 'round') return null;
   const source = p.combo ?? (p.source ? def(t, p.source).name : null);
   const titled = (text: string) => (source ? `${source}: ${text}` : text);
+  // The card a question is about stays in sight: the one you put back, or the one you may swap for.
+  const cardId = p.card ? t.known.get(p.card) : undefined;
   let title: string;
   let body: Child = null;
   switch (p.kind) {
@@ -545,8 +549,6 @@ function promptBar(t: T): HTMLElement | null {
       );
       break;
     case 'choosePosition': {
-      // The card you are placing stays in sight, so you know what you are putting where.
-      const cardId = p.card ? t.known.get(p.card) : undefined;
       const what = !cardId ? 'the card' : cardId === p.source ? 'it' : def(t, cardId).name;
       title = titled(`where does ${what} go? 1 is the top of the pile.`);
       const buttons: Child[] = [];
@@ -554,12 +556,7 @@ function promptBar(t: T): HTMLElement | null {
         const label = i === 0 ? '1 (top)' : i === p.choices - 1 ? `${i + 1} (bottom)` : String(i + 1);
         buttons.push(h('button', { type: 'button', class: 'btn btn-sm choice', onclick: () => answer(t, i) }, label));
       }
-      body = h(
-        'div',
-        { class: 'position-choice' },
-        cardId ? face(t, { uid: p.card!, cardId }, { size: 'md' }) : null,
-        h('div', { class: 'choices choices-dense' }, buttons),
-      );
+      body = h('div', { class: 'choices choices-dense' }, buttons);
       break;
     }
     case 'chooseCard':
@@ -589,22 +586,8 @@ function promptBar(t: T): HTMLElement | null {
       );
       break;
   }
+  if (cardId) body = h('div', { class: 'prompt-card' }, face(t, { uid: p.card!, cardId }, { size: 'md' }), h('div', { class: 'prompt-card-body' }, body));
   return h('div', { class: 'prompt-bar', role: 'group', 'aria-label': title }, h('p', { class: 'prompt-title' }, title), body);
-}
-
-/** Whose move it is, in words. The host gets a button to take out a player who is away. */
-function turnStatus(t: T): HTMLElement | null {
-  const g = t.game;
-  if (g.phase !== 'round' || !g.waiting) return null;
-  const w = g.waiting;
-  const player = g.players[w.seat]!;
-  if (w.seat === g.you) return h('span', { class: 'turn-banner is-you' }, t.prompt ? 'Your move' : 'Sending...');
-  return h(
-    'span',
-    { class: 'turn-banner' },
-    player.connected ? `Waiting for ${player.name} ${WAITING_FOR[w.kind]}.` : `${player.name} is away. Waiting for them ${WAITING_FOR[w.kind]}.`,
-    kickButton(t, player),
-  );
 }
 
 function kickButton(t: T, player: PlayerView): HTMLElement | null {
@@ -654,14 +637,24 @@ function layoutToggle(t: T): HTMLElement {
   return h('div', { class: 'layout-toggle', role: 'group', 'aria-label': 'Table layout' }, option('classic', 'Classic'), option('round', 'Round table'));
 }
 
+/** The host can send everyone back to the lobby at any time. After the game the result has its own button. */
+function endGameButton(t: T): HTMLElement | null {
+  if (!t.ctx.session.isHost || t.game.phase === 'gameOver') return null;
+  const end = async () => {
+    const sure = await confirmDialog('End the game?', 'Everyone goes back to the lobby. This game cannot be picked up again.', 'End the game', 'Keep playing');
+    if (sure) t.ctx.session.act({ kind: 'endGame' });
+  };
+  return h('button', { type: 'button', class: 'btn btn-ghost btn-sm end-game', onclick: () => void end() }, 'End game');
+}
+
 function statusBar(t: T): HTMLElement {
-  return h('div', { class: 'table-status' }, roundInfo(t), turnStatus(t), layoutToggle(t), flagsRow(t), ticker(t, 'ticker'));
+  return h('div', { class: 'table-status' }, roundInfo(t), layoutToggle(t), endGameButton(t), flagsRow(t), ticker(t, 'ticker'));
 }
 
 // ---------- Round table ----------
 
 function roundTop(t: T): HTMLElement {
-  return h('div', { class: 'rt-top' }, roundInfo(t), layoutToggle(t));
+  return h('div', { class: 'rt-top' }, roundInfo(t), layoutToggle(t), endGameButton(t));
 }
 
 /** Seats around the oval in turn order, clockwise, you at the bottom. Angles in degrees, 90 is the bottom. */

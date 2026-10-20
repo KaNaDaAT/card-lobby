@@ -106,7 +106,13 @@ nothing else.
 - The host can change how many copies of each card go into the deck (0 to 20), for cards
   whose count is a plain number. Counts that depend on the players (one kitten less than
   players) are rules and stay. Start is blocked while the counts break round setup for the
-  players at the table. The counts are fixed when the game starts and saved with it.
+  players at the table. The counts are fixed when the game starts and saved with it. The
+  host can save counts as named presets in their browser, per game, and load them later.
+- The host picks the seats, from the game's minimum up to 12. Fewer than the game allows
+  makes the rest watch. More than it allows keeps counts that depend on the players by ranges
+  (tokens to win) at their value for the game's maximum, and Start is blocked while the deck
+  cannot be dealt for the players at the table.
+- The host can end a game at any time, which sends everyone back to the lobby.
 - Each card shows the icon of the game or addon it comes from, when the pack has one.
 - Everyone sees the same lobby live. Only the host can change it.
 - Players list: color avatar, name, host and you badges, connection state, pack-ready state.
@@ -197,6 +203,9 @@ start of the owner's turn.
   where it went. A random or chosen card taken from a hand (Pair, Favor) does the same for
   that hand. The simulation tries several answers to every position question and checks that
   nobody else's view changes.
+- Your own hand shows an eye on each card another player knows, naming them. Knowledge nobody
+  saw happen is left out (`quiet` on the card): after a secret put-back, which cards in that
+  pile the mover still knows, since telling the next holder would tell where the card went.
 - Shuffling a zone clears `knownBy` for its cards and gives them new uids, so nobody can track
   a card through a shuffle by its id.
 - The simulation test checks that no view ever contains a hidden card its seat does not know.
@@ -278,8 +287,10 @@ Safety rules:
    and options, players, chat, Start.
 3. **Table**, in two layouts each player picks for themselves (remembered per browser):
    - **Classic**: opponents along the top, deck and set-aside in the middle, your hand at the
-     bottom, played cards in front of each player, a prompt bar, tokens per player, log and
-     chat in a side panel (a drawer on phones), players below the table.
+     bottom, played cards in front of each player, tokens per player, log and chat in a side
+     panel (a drawer on phones), players below the table. Between the middle and your hand,
+     one slot holds the question, the reaction window or who the game waits on, so the table
+     does not jump when they come and go.
    - **Round table**: everyone seated around an oval in turn order, clockwise, you at the
      bottom. The seat the game waits on glows, an arrow and a spotlight point at it, and the
      middle says whose move it is, with the shared piles, round flags and the latest event.
@@ -289,8 +300,9 @@ Safety rules:
      short screens. Players move into a tab beside the log. On narrow screens the seats sit
      in a grid instead of an oval.
    - In both, clicking a card in your hand opens it large with its text, with Play and Back.
-     Cards played in combos are picked instead, and one picked card shows its text. The
-     question where a card goes back (Mouse Trapper, a defused kitten) shows that card.
+     Cards played in combos are picked instead, and one picked card shows its text. A
+     question about one card shows that card: where it goes back (Mouse Trapper, a defused
+     kitten), or whether to swap for it (Doggy Grave Digger, Treasure Magpie, Haggling Hamster).
    - The room uses the whole window. On wide screens the cards grow with it, so the table fills
      the screen instead of sitting in a narrow column.
 4. **Signals** (`src/ui/events.ts` compares the view a page had with the new one): a big

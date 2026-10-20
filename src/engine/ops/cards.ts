@@ -7,6 +7,7 @@ import {
   defOf,
   forget,
   handOf,
+  hush,
   log,
   moveCard,
   nameOf,
@@ -107,7 +108,11 @@ export const move: OpDef = {
     };
     // Nobody can follow a random position, not even the mover.
     const done = () => {
-      if (hiddenSpot) forget(rt, to, op.at === 'random' ? [] : [selfSeat(rt)]);
+      if (hiddenSpot) {
+        forget(rt, to, op.at === 'random' ? [] : [selfSeat(rt)]);
+        // Nobody else can tell which of these cards the mover still knows.
+        for (const uid of to.cards) hush(rt, uid, selfSeat(rt));
+      }
       return 'next' as const;
     };
     if (op.card !== undefined || op.match !== undefined) {

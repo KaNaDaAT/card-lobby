@@ -12,14 +12,14 @@ test('two tabs share a lobby and chat, and the room survives a host reload', asy
   await tom.press('.chat-form input', 'Enter');
   await expect(page.locator('.chat-log')).toContainText('hello from tom');
 
-  await page.locator('.option select').first().selectOption('sumPlayed');
-  await expect(tom.locator('.option select').first()).toHaveValue('sumPlayed');
-  await expect(tom.locator('.option select').first()).toBeDisabled();
+  await page.locator('.option:has-text("Tie-break") select').selectOption('sumPlayed');
+  await expect(tom.locator('.option:has-text("Tie-break") select')).toHaveValue('sumPlayed');
+  await expect(tom.locator('.option:has-text("Tie-break") select')).toBeDisabled();
 
   await page.reload();
   await expect(page.locator('.player-list .conn.on')).toHaveCount(2, { timeout: 20_000 });
   await expect(tom.locator('.notice-warn')).toHaveCount(0, { timeout: 20_000 });
-  await expect(tom.locator('.option select').first()).toHaveValue('sumPlayed');
+  await expect(tom.locator('.option:has-text("Tie-break") select')).toHaveValue('sumPlayed');
   await expect(page.locator('.chat-log')).toContainText('hello from tom');
   expect(errors).toEqual([]);
 });
@@ -35,8 +35,18 @@ test('the host sets card counts and slow mode, and clears the chat', async ({ co
   await expect(tom.locator('.count-note')).toHaveText('The host changed how many copies go into the deck.');
   await expect(tom.locator('.count-card.is-zero')).toHaveCount(1);
   await expect(tom.locator('.hero-pills')).toContainText('21 cards');
+  await page.fill('.preset-save input', 'No king');
+  await page.click('.preset-save button');
   await page.click('.count-note button:has-text("Reset")');
   await expect(tom.locator('.count-note')).toHaveCount(0);
+  await page.click('.preset button:has-text("No king")');
+  await expect(tom.locator('.count-card.is-zero')).toHaveCount(1);
+  await page.click('.count-note button:has-text("Reset")');
+  await expect(tom.locator('.count-note')).toHaveCount(0);
+
+  await page.locator('.option:has-text("Seats") select').selectOption('3');
+  await expect(tom.locator('.option:has-text("Seats") select')).toHaveValue('3');
+  await expect(page.locator('.players .pill')).toHaveText('2 / 3');
 
   await tom.fill('.chat-form input', 'one');
   await tom.press('.chat-form input', 'Enter');
@@ -54,6 +64,21 @@ test('the host sets card counts and slow mode, and clears the chat', async ({ co
   await expect(tom.locator('.chat-log')).toHaveText('The host cleared the chat.');
   await tom.click('.chat-tools button:has-text("Clear")');
   await expect(tom.locator('.chat-log')).toHaveText('You cleared the chat.');
+  expect(errors).toEqual([]);
+});
+
+test('the host can end a game for everyone', async ({ context, page }) => {
+  const errors: string[] = [];
+  watchErrors(page, errors, 'host');
+  const hash = await createLobby(page, 'Hana');
+  const tom = await joinTab(context, hash, '2', 'Tom', errors);
+  await page.click('button:has-text("Start game")');
+  await expect(tom.locator('.table')).toBeVisible();
+  await expect(tom.locator('.end-game')).toHaveCount(0);
+  await page.click('.end-game');
+  await page.click('dialog.confirm-dialog button:has-text("End the game")');
+  await expect(tom.locator('.hero-text h2')).toHaveText('Power Hungry Pets');
+  await expect(tom.locator('.chat-log')).toContainText('The host ended the game.');
   expect(errors).toEqual([]);
 });
 

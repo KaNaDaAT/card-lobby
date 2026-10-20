@@ -164,3 +164,17 @@ Noted after the first games with friends. Protocol version 4.
   count. Start is blocked while the counts break round setup.
 - [x] **Pack icons on cards**: `art.icon` for a game, `icon` for an addon, shown in the top
   right corner of its cards and in the large card view.
+
+## Playtest feedback, round 2 (done)
+
+Protocol version 5.
+
+- [x] **The 6s**: Doggy Grave Digger, Treasure Magpie (and Haggling Hamster) show the card you
+  may swap for, like Mouse Trapper. `confirm` takes a `card`, `reveal` takes `as`.
+- [x] **The table jumped**: in the classic layout the reaction window (Nope) and the prompt bar
+  pushed the table down and back. They now share one slot that keeps its place.
+- [x] **Back to the lobby**: the host can end a game at any time.
+- [x] **Card count presets**: saved by name in the host's browser, per game. The card row keeps
+  its scroll when a count changes.
+- [x] **Seats**: the host picks how many players sit down, also more than the game is made for.
+- [x] **The eye**: a card in your hand shows who else knows it.

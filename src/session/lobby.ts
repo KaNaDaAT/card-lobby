@@ -1,7 +1,8 @@
 /** Lobby rules shared by the host session (which enforces them) and the lobby screen. */
 import { checkSetup } from '../engine/index';
+import { resolveCount } from '../packs/count';
 import { addonProblems, mergeAddons } from '../packs/merge';
-import type { LoadedPack, OptionDef, OptionValue, Pack } from '../packs/types';
+import type { Count, LoadedPack, OptionDef, OptionValue, Pack } from '../packs/types';
 
 /** Option value meaning "use the pack's default for the player count at start". */
 export const AUTO = 'auto';
@@ -9,19 +10,63 @@ export const AUTO = 'auto';
 /** Most copies of one card the host may put into the deck. */
 export const MAX_CARD_COUNT = 20;
 
+/** Most seats the host may give a table. */
+export const MAX_SEATS = 12;
+
+/** What the host changed about the game: copies by card id, and the seats (null keeps the game's own maximum). */
+export interface Tweaks {
+  counts: Readonly<Record<string, number>>;
+  seats: number | null;
+}
+
+export const NO_TWEAKS: Tweaks = { counts: {}, seats: null };
+
+/** The host's changes as a lobby view carries them. */
+export const tweaksOf = (lobby: { counts: Record<string, number>; seats: number | null }): Tweaks => ({ counts: lobby.counts, seats: lobby.seats });
+
 export interface Selection {
-  /** The pack with the selected addons and card counts applied, or null when merging failed. */
+  /** The pack with the selected addons and the host's changes applied, or null when merging failed. */
   pack: Pack | null;
   problems: string[];
 }
 
-export function mergeSelection(lp: LoadedPack, addons: readonly string[], counts: Readonly<Record<string, number>> = {}): Selection {
+export function mergeSelection(lp: LoadedPack, addons: readonly string[], tweaks: Tweaks = NO_TWEAKS): Selection {
   const problems = addonProblems(lp.addons, addons);
   try {
-    return { pack: withCounts(mergeAddons(lp.pack, lp.addons, addons), counts), problems };
+    return { pack: withTweaks(mergeAddons(lp.pack, lp.addons, addons), tweaks), problems };
   } catch (err) {
     return { pack: null, problems: [err instanceof Error ? err.message : String(err), ...problems] };
   }
+}
+
+export function withTweaks(pack: Pack, tweaks: Tweaks): Pack {
+  return withSeats(withCounts(pack, tweaks.counts), tweaks.seats);
+}
+
+/**
+ * The pack with as many seats as the host picked. Above the game's own maximum, a count that
+ * depends on the players by ranges keeps the value it has at that maximum.
+ */
+export function withSeats(pack: Pack, seats: number | null): Pack {
+  const max = pack.players.max;
+  if (seats === null || seats === max) return pack;
+  const players = { ...pack.players, max: seats };
+  if (seats < max) return { ...pack, players };
+  const extend = (count: Count): Count => {
+    if (typeof count !== 'object' || !('byPlayers' in count)) return count;
+    return { byPlayers: { ...count.byPlayers, [`${max + 1}+`]: resolveCount(count, max) } };
+  };
+  const toWin = pack.rules.scoring.toWin;
+  return {
+    ...pack,
+    players,
+    cards: pack.cards.map((c) => ({ ...c, count: extend(c.count) })),
+    options: pack.options?.map((o) => (o.type === 'number' ? { ...o, default: extend(o.default) } : o)),
+    rules: {
+      ...pack.rules,
+      scoring: { ...pack.rules.scoring, toWin: typeof toWin === 'object' && 'option' in toWin ? toWin : extend(toWin) },
+    },
+  };
 }
 
 /**
@@ -37,13 +82,13 @@ export function withCounts(pack: Pack, counts: Readonly<Record<string, number>>)
 }
 
 /**
- * Why the picked card counts do not work for a game of `players`, or null. Smaller rounds are
- * checked too, since players can sit out a round.
+ * Why the host's changes break round setup for a game of `players`, or null. Smaller rounds are
+ * checked too, since players can sit out a round. `what` names the changes in the message.
  */
-export function countsProblem(pack: Pack, players: number): string | null {
+export function setupProblem(pack: Pack, players: number, what: string | null): string | null {
   for (let n = pack.players.min; n <= Math.min(pack.players.max, Math.max(pack.players.min, players)); n++) {
     const problem = checkSetup(pack, n);
-    if (problem) return `With these card counts and ${n} players, ${problem}.`;
+    if (problem) return `With ${what ? `${what} and ` : ''}${n} players, ${problem}.`;
   }
   return null;
 }

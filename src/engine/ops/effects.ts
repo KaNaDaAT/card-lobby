@@ -56,9 +56,10 @@ export const peek: OpDef = {
   },
 };
 
+/** Shows the cards of a zone to some players. `as` stores what was shown, like peek. */
 export const reveal: OpDef = {
   status: 'ready',
-  params: { zone: 'zones', to: 'audience' },
+  params: { zone: 'zones', to: 'audience', as: 'as' },
   required: ['zone', 'to'],
   run(rt, op) {
     const seats = op.to === 'all' ? allSeats(rt) : resolvePlayers(rt, op.to);
@@ -68,6 +69,8 @@ export const reveal: OpDef = {
       for (const uid of zone.cards) know(rt, uid, seats);
       log(rt, `${capitalize(zoneLabel(rt, zone))}: ${cardList(rt, zone.cards)}.`, op.to === 'all' ? 'all' : seats);
     }
+    const uids = zones.flatMap((z) => z.cards);
+    if (op.as !== undefined) setVar(rt, String(op.as), uids.length === 1 ? uids[0]! : uids);
     return 'next';
   },
 };

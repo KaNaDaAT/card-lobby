@@ -1,11 +1,14 @@
 import type { CardOrigin } from '../../packs/merge';
 import { valueText, type CardDef, type LoadedPack } from '../../packs/types';
 import { h } from '../dom';
+import { icon } from './bits';
 
 export interface CardOpts {
   size?: 'sm' | 'md' | 'lg';
   /** The game or addon the card comes from. Its icon sits in the top right corner. */
   origin?: CardOrigin;
+  /** Other players who know this card in your hand. An eye shows it. */
+  seenBy?: string[];
   /** Makes the card a button. Without it, clicking shows the card large with its text. */
   onClick?: () => void;
   /** Highlights a card that can be played or picked. */
@@ -32,12 +35,22 @@ function originIcon(lp: LoadedPack, origin: CardOrigin | undefined): HTMLElement
   return origin?.icon ? h('img', { class: 'card-icon', src: lp.asset(origin.icon), alt: '', title: origin.name, draggable: 'false' }) : null;
 }
 
+const EYE = ['M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z', 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z'];
+
+function seenBadge(names: string[] | undefined): HTMLElement | null {
+  if (!names?.length) return null;
+  const who = names.length === 1 ? names[0]! : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+  const text = `${who} ${names.length === 1 ? 'knows' : 'know'} this card`;
+  return h('span', { class: 'card-seen', title: text, 'aria-label': text, role: 'img' }, icon(EYE));
+}
+
 /** A card face: the pack's art with value and name drawn on top. */
 export function cardFace(lp: LoadedPack, card: CardDef, opts: CardOpts = {}): HTMLElement {
   const parts = [
     card.image ? h('img', { src: lp.asset(card.image), alt: '', loading: 'lazy', draggable: 'false' }) : null,
     card.value !== undefined ? h('span', { class: 'card-value' }, valueText(card)) : null,
     originIcon(lp, opts.origin),
+    seenBadge(opts.seenBy),
     opts.note ? h('span', { class: 'card-note' }, opts.note) : null,
     h('span', { class: 'card-name' }, card.name),
   ];

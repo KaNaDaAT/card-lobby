@@ -16,6 +16,11 @@ export interface CardInstance {
   faceUp: boolean;
   /** Seats that know this card's identity although its zone hides it. */
   knownBy: Seat[];
+  /**
+   * Seats in `knownBy` whose knowing nobody saw happen: the mover of a card put back at a secret
+   * position. Telling the card's next holder would tell where it went.
+   */
+  quiet?: Seat[];
 }
 
 export interface Zone {
@@ -85,6 +90,8 @@ interface PromptBase {
   /** The combo whose effect asks, if any. */
   combo?: string;
   text?: string;
+  /** The card the question is about (the one to place or to swap for), when the answering seat knows it. */
+  card?: string;
 }
 
 /**
@@ -106,12 +113,7 @@ export type Prompt =
     })
   | (PromptBase & { kind: 'choosePlayer'; choices: Seat[] })
   | (PromptBase & { kind: 'guess'; choices: number[] })
-  | (PromptBase & {
-      kind: 'choosePosition';
-      choices: number;
-      /** The card going into the zone, when the answering seat knows it. */
-      card?: string;
-    })
+  | (PromptBase & { kind: 'choosePosition'; choices: number })
   | (PromptBase & { kind: 'confirm' })
   | (PromptBase & { kind: 'chooseCard'; choices: string[] })
   | (PromptBase & { kind: 'nameCard'; choices: string[] });
@@ -205,6 +207,11 @@ export interface VisibleCard {
   cardId: string;
 }
 
+/** A card in your own hand, with the other seats you know know it (they looked, or held it). */
+export interface HandCard extends VisibleCard {
+  seenBy: Seat[];
+}
+
 /** A zone as one seat sees it: how many cards, and the ones this seat knows with their positions. */
 export interface ZoneView {
   count: number;
@@ -239,7 +246,7 @@ export interface GameView {
   deciding: Seat[] | null;
   players: PlayerView[];
   /** Your own hand, empty for spectators. */
-  hand: VisibleCard[];
+  hand: HandCard[];
   /** Shared zones. */
   zones: Record<string, ZoneView>;
   /** The open question, only when it is yours to answer. */

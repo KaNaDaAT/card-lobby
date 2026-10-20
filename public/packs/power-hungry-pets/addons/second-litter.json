@@ -83,7 +83,7 @@
         "text": "Look at the top card of the draw pile. You may swap it with your card.",
         "onPlay": [
           { "op": "peek", "zone": "deck", "count": 1, "as": "top" },
-          { "op": "confirm", "as": "swap", "text": "Swap your card with the top card of the draw pile?" },
+          { "op": "confirm", "as": "swap", "text": "Swap your card with the top card of the draw pile?", "card": "$top" },
           {
             "op": "if",
             "cond": { "is": "$swap" },
@@ -117,8 +117,8 @@
         "text": "Choose another player and look at their card. You may trade cards with them.",
         "onPlay": [
           { "op": "choosePlayer", "as": "t", "from": "others" },
-          { "op": "reveal", "zone": "hand:$t", "to": "self" },
-          { "op": "confirm", "as": "trade", "text": "Trade cards with {$t}?" },
+          { "op": "reveal", "zone": "hand:$t", "to": "self", "as": "seen" },
+          { "op": "confirm", "as": "trade", "text": "Trade cards with {$t}?", "card": "$seen" },
           {
             "op": "if",
             "cond": { "is": "$trade" },

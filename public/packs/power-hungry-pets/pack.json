@@ -175,8 +175,8 @@
       "image": "art/doggy-grave-digger.svg",
       "text": "Look at the face-down set-aside card. You may swap it with your card.",
       "onPlay": [
-        { "op": "peek", "zone": "setAside", "count": 1 },
-        { "op": "confirm", "as": "swap", "text": "Swap your card with the set-aside card?" },
+        { "op": "peek", "zone": "setAside", "count": 1, "as": "seen" },
+        { "op": "confirm", "as": "swap", "text": "Swap your card with the set-aside card?", "card": "$seen" },
         {
           "op": "if",
           "cond": { "is": "$swap" },

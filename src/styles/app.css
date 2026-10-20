@@ -873,6 +873,26 @@ select.input {
   display: none;
 }
 
+/* Others know this card in your hand. */
+.card-seen {
+  position: absolute;
+  top: 34%;
+  left: 6%;
+  display: grid;
+  place-items: center;
+  width: 26cqw;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgb(29 21 48 / 0.85);
+  color: #ffe08a;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+}
+
+.card-seen .icon {
+  width: 70%;
+  height: 70%;
+}
+
 /* Copies of each card in the lobby. The host gets a stepper. */
 .count-card {
   display: flex;
@@ -926,6 +946,44 @@ select.input {
   align-items: center;
   gap: 8px;
   color: var(--text-2);
+  font-size: 13px;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 8px;
+}
+
+.presets-label {
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.preset {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.preset .btn {
+  border: 0;
+}
+
+.preset-save {
+  display: flex;
+  gap: 6px;
+}
+
+.preset-save .input {
+  width: 150px;
+  min-height: 28px;
+  padding: 0 8px;
   font-size: 13px;
 }
 
@@ -1318,23 +1376,6 @@ select.input {
 
 .table-info .muted {
   font-size: 13px;
-}
-
-.turn-banner {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 10px;
-  margin-left: auto;
-  padding: 6px 12px;
-  border-radius: 12px;
-  background: var(--surface-2);
-  font-weight: 600;
-}
-
-.turn-banner.is-you {
-  background: var(--accent);
-  color: var(--accent-ink);
 }
 
 .table-flags {
@@ -2248,6 +2289,17 @@ select.input {
   }
 }
 
+/* Classic: the question, the reaction window or who the game waits on, always in one place. */
+.ask-slot {
+  display: flex;
+  flex-direction: column;
+  min-height: 112px;
+}
+
+.ask-slot > * {
+  flex: 1;
+}
+
 /* Prompt */
 
 .prompt-bar {
@@ -2299,14 +2351,22 @@ select.input {
   min-width: 44px;
 }
 
-.position-choice {
+/* A question about one card shows it beside the answers. Click it to read it. */
+.prompt-card {
   display: flex;
   align-items: flex-start;
   gap: 14px;
 }
 
-.position-choice > .card {
+.prompt-card > .card {
   flex: none;
+}
+
+.prompt-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
 }
 
 /* Reaction window */
@@ -2779,10 +2839,6 @@ dialog::backdrop {
 
   .card-lg {
     width: 104px;
-  }
-
-  .turn-banner {
-    margin-left: 0;
   }
 }
 
