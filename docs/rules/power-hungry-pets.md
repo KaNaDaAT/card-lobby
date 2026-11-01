@@ -158,35 +158,36 @@ players a way to answer it. Untested balance, adjust after playing. Deck: 24 car
 
 ## Second Litter addon (house design)
 
-One new pet for each number from 1 to 8, one copy each. Deck: 29 cards (32 with Off the
-Scale). Untested balance, adjust after playing. Each new pet's action is about as strong and as risky as the pet it shares a number
-with: low pets are cheap to give up, so their actions poke at others; high pets are worth
-keeping for the showdown, so playing one has to be worth it.
+One new pet for each number from 1 to 8. Low pets come in more copies, like in the base game:
+three each of 1, 2 and 3, two 4s and 5s, one of each higher number. Deck: 37 cards (40 with
+Off the Scale). With Big Litter it is 48, since Big Litter adds no copies of these pets. Numbers were moved once after
+playtesting, balance is still rough. Low pets are cheap to give up, so their actions poke at
+others. High pets are worth keeping for the showdown, so playing one has to be worth it.
 
-| Value | Card | Action | Next to |
-|---|---|---|---|
-| 8 | Haggling Hamster | Choose another player and look at their card. You may trade cards with them | Hermit Home Swap: a trade, but you see first |
-| 7 | Penguin Parade | Everyone still in, you included, passes their card to the next player | Jittery Juggler: everyone's card moves |
-| 6 | Treasure Magpie | Look at the top card of the draw pile. You may swap it with your card | Doggy Grave Digger: a peek and a swap |
-| 5 | Swapsie Squirrel | Choose two other players. They trade cards | Snake Sorcerer: messes with someone else's card |
-| 4 | Tunnel Mole | Put your card face down at the bottom of the draw pile and draw a new one | Shell Shield: gets you out of trouble |
-| 3 | Pillow-Fight Panda | Choose another player. You both put your card face up without its action and draw a new one | Battle Bunny: a duel that costs you too |
-| 2 | Nosy Ferret | Choose another player and secretly look at their card | Mouse Trapper: information |
-| 1 | Gossip Parrot | Choose another player. They show their card to everyone | Crystal Bowl: sets up a knockout instead of trying one |
+| Value | Card | Copies | Action | Compared with |
+|---|---|---|---|---|
+| 8 | Haggling Hamster | 1 | Choose another player and look at their card. You may trade cards with them | Hermit Home Swap (8): a trade, but you see first |
+| 7 | Penguin Parade | 1 | Everyone still in, you included, passes their card to the next player | Jittery Juggler (7): everyone's card moves |
+| 6 | Gossip Parrot | 1 | Choose another player. They show their card to everyone | Crystal Bowl (1): sets up a knockout for the whole table instead of trying one |
+| 5 | Treasure Magpie | 2 | Look at the top card of the draw pile. You may swap it with your card | Doggy Grave Digger (6): a peek and a swap, but the next player draws what you put back |
+| 4 | Pillow-Fight Panda | 2 | Choose another player. You both put your card face up without its action and draw a new one | Snake Sorcerer (5): forces a card face up, yours too |
+| 3 | Swapsie Squirrel | 3 | Choose two other players. They trade cards | Hermit Home Swap (8): a trade, but blind and between two others |
+| 2 | Tunnel Mole | 3 | Put your card face down at the bottom of the draw pile and draw a new one | Mouse Trapper (2): works the draw pile |
+| 1 | Nosy Ferret | 3 | Choose another player and secretly look at their card | Crystal Bowl (1): no guess, but you know the card for your next turn |
 
 Details:
 
 - **Haggling Hamster**: only you see the card. Everyone knows you looked.
 - **Penguin Parade**: in turn order. Shielded players keep their card and are skipped. You
   still know the card you passed on.
+- **Gossip Parrot**: everyone, spectators too, sees the card. Anyone can aim a Crystal Bowl at it.
 - **Treasure Magpie**: if you swap, your old card is on top of the draw pile, so the next
   player draws it. Only you know what it is.
-- **Swapsie Squirrel**: you see neither card. The two players each learn the other's card.
-  With only two players in, it does nothing.
-- **Tunnel Mole**: nobody else learns what you buried, unless they already knew your card.
 - **Pillow-Fight Panda**: you go first. If either card is the King Cat, its holder is out and
   does not draw. If the draw pile is empty, the face-down set-aside card is drawn, as with
   Snake Sorcerer.
-- **Gossip Parrot**: everyone, spectators too, sees the card. Anyone can aim a Crystal Bowl at it.
-- Crystal Bowl still cannot guess 1, Gossip Parrot included.
+- **Swapsie Squirrel**: you see neither card. The two players each learn the other's card.
+  With only two players in, it does nothing.
+- **Tunnel Mole**: nobody else learns what you buried, unless they already knew your card.
+- Crystal Bowl still cannot guess 1, Nosy Ferret included.
 - Players: same as the base game (2 to 6, or up to 10 with Big Litter).
