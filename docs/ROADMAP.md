@@ -189,3 +189,5 @@ Protocol version 5.
 - [x] **Shorter card texts**: eleven cards say the same in fewer words, in the app and in print.
 - [x] **Print files**: `npm run print-cards` lays out the game with all addons as 70 x 120 mm
   cards for meinspiel.de, with two rules cards in place of a rulebook.
+- [x] **Print PDF**: the same cards as PDF/X-4 at 600 dpi, with the shop's ISO Coated v2 300%
+  profile as output intent.

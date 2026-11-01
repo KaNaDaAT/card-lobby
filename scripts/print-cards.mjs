@@ -5,18 +5,44 @@
  * writes print/preview.html (each design once, with the cut line) and print/cards/*.png at
  * 898 x 1488 pixels (300 dpi), one file per printed card, plus print/back.png.
  *
+ * With the shop's ISO Coated v2 300% (ECI) profile in print-profile/ (or --profile <icc>), it
+ * also writes print/fronts.pdf and print/back.pdf as PDF/X-4 at 600 dpi. The card images use
+ * the system's sRGB profile (or --rgb-profile <icc>).
+ *
  * Every card has a thin white rim, so card edges do not tell cards apart. Base cards come in Big
  * Litter counts. Off the Scale is doubled and Second Litter gets one spare of each card. Two
  * rules cards replace the rulebook.
  */
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from '@playwright/test';
+import { pdfImage, writePdfX4 } from './pdf-x4.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PACK = join(ROOT, 'public/packs/power-hungry-pets');
 const OUT = join(ROOT, 'print');
+
+const option = (name) => {
+  const i = process.argv.indexOf(name);
+  return i < 0 ? undefined : process.argv[i + 1];
+};
+
+/** The CMYK profile for the PDF's output intent and the sRGB profile of the card images. */
+function loadProfiles() {
+  const cmyk = option('--profile') ?? join(ROOT, 'print-profile', 'ISOcoated_v2_300_eci.icc');
+  const rgb =
+    option('--rgb-profile') ??
+    (process.platform === 'win32'
+      ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'spool', 'drivers', 'color', 'sRGB Color Space Profile.icm')
+      : '/System/Library/ColorSync/Profiles/sRGB Profile.icc');
+  const missing = [cmyk, rgb].filter((path) => !existsSync(path));
+  if (missing.length) {
+    console.log(`No PDF, profile not found: ${missing.join(', ')}`);
+    return null;
+  }
+  return { cmykProfile: readFileSync(cmyk), rgbProfile: readFileSync(rgb) };
+}
 
 /** The shop's file size. Sizes below are in mm, measured from the cut card's top left. */
 const PIXELS = { w: 898, h: 1488 };
@@ -306,20 +332,48 @@ mkdirSync(join(OUT, 'cards'), { recursive: true });
 const preview = join(OUT, 'preview.html');
 writeFileSync(preview, html);
 
+const profiles = loadProfiles();
 const browser = await chromium.launch();
-const page = await browser.newPage({ deviceScaleFactor: DPR, viewport: { width: 600, height: 900 } });
-await page.goto(pathToFileURL(preview).href);
-await page.evaluate(() => document.body.classList.replace('guides', 'render'));
-const designs = await page.$$eval('.card', (els) => els.map((el) => ({ name: el.dataset.name, copies: Number(el.dataset.copies) })));
+
+/** Opens the sheet in render mode, where only the card marked `on` shows. */
+async function sheet(scale) {
+  const page = await browser.newPage({ deviceScaleFactor: scale, viewport: { width: 600, height: 900 } });
+  await page.goto(pathToFileURL(preview).href);
+  await page.evaluate(() => document.body.classList.replace('guides', 'render'));
+  return page;
+}
+
+/** Screenshots design `i`, as a PNG buffer and optionally into `path`. */
+async function shoot(page, i, path) {
+  await page.evaluate((i) => document.querySelectorAll('.card').forEach((el, j) => el.classList.toggle('on', i === j)), i);
+  return page.screenshot({ path, clip: { x: 0, y: 0, width: PIXELS.w / DPR, height: PIXELS.h / DPR } });
+}
+
+const png = await sheet(DPR);
+const hires = profiles && (await sheet(DPR * 2));
+const designs = await png.$$eval('.card', (els) => els.map((el) => ({ name: el.dataset.name, copies: Number(el.dataset.copies) })));
+const fronts = [];
+let backImage;
 let n = 0;
 for (const [i, { name, copies }] of designs.entries()) {
-  await page.evaluate((i) => document.querySelectorAll('.card').forEach((el, j) => el.classList.toggle('on', i === j)), i);
   const first = name === 'back' ? join(OUT, 'back.png') : join(OUT, 'cards', `${String(n + 1).padStart(3, '0')}-${name}.png`);
-  await page.screenshot({ path: first, clip: { x: 0, y: 0, width: PIXELS.w / DPR, height: PIXELS.h / DPR } });
+  await shoot(png, i, first);
   for (let copy = 1; copy <= copies; copy++) {
     n++;
     if (copy > 1) copyFileSync(first, join(OUT, 'cards', `${String(n).padStart(3, '0')}-${name}.png`));
   }
+  if (hires) {
+    const image = pdfImage(await shoot(hires, i));
+    if (name === 'back') backImage = image;
+    else fronts.push(...Array(copies).fill(image));
+  }
 }
 await browser.close();
 console.log(`${n} cards and a back in ${OUT}`);
+
+if (profiles) {
+  const pdf = { size: { w: CUT.w + 6, h: CUT.h + 6 }, bleed: 3, condition: { id: 'FOGRA39', name: 'ISO Coated v2 300% (ECI)' }, ...profiles };
+  writePdfX4(join(OUT, 'fronts.pdf'), fronts, { ...pdf, title: 'Power Hungry Pets, fronts' });
+  writePdfX4(join(OUT, 'back.pdf'), [backImage], { ...pdf, title: 'Power Hungry Pets, back' });
+  console.log(`PDF/X-4: fronts.pdf (${fronts.length} pages) and back.pdf`);
+}
