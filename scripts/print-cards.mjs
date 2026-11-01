@@ -9,9 +9,10 @@
  * also writes print/fronts.pdf and print/back.pdf as PDF/X-4 at 600 dpi. The card images use
  * the system's sRGB profile (or --rgb-profile <icc>).
  *
- * Every card has a thin white rim, so card edges do not tell cards apart. Base cards come in Big
- * Litter counts. Off the Scale is doubled and Second Litter gets one spare of each card. Two
- * rules cards replace the rulebook.
+ * Every card has a thin white rim, so card edges do not tell cards apart. The print run is 80
+ * cards, a deck size the shop offers: Big Litter counts plus one spare of each base card (two of
+ * the three most played), Off the Scale doubled, one spare of each Second Litter card, and two
+ * copies each of the two rules cards that replace the rulebook.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -75,15 +76,22 @@ const litter = json('addons/second-litter.json');
 const addonCards = (addon, spares) =>
   addon.cards.add.map((c) => ({ ...c, icon: addon.icon, small: c.count, large: c.count, print: c.count + spares(c) }));
 
+const PRINT_RUN = 80;
+const MOST_PLAYED = ['crystal-bowl', 'mouse-trapper', 'battle-bunny'];
+const RULES_COPIES = 2;
+
 /** `small` and `large` are the copies in play for 2 to 6 and 7 to 10 players. */
 const cards = [
   ...game.cards.map((c) => {
     const large = big.cards.modify[c.id]?.count ?? c.count;
-    return { ...c, icon: game.art.icon, small: c.count, large, print: large };
+    return { ...c, icon: game.art.icon, small: c.count, large, print: large + (MOST_PLAYED.includes(c.id) ? 2 : 1) };
   }),
   ...addonCards(offScale, (c) => c.count),
   ...addonCards(litter, () => 1),
 ].sort((a, b) => a.value - b.value);
+
+const printed = cards.reduce((sum, c) => sum + c.print, 2 * RULES_COPIES);
+if (printed !== PRINT_RUN) throw new Error(`The print run is ${printed} cards, not ${PRINT_RUN}. Adjust the spares.`);
 
 const label = (c) => c.valueLabel ?? String(c.value);
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -131,7 +139,7 @@ const front = (c) => `
 </section>`;
 
 const rulesCard = (name, title, body) => `
-<section class="card rules" data-name="${name}" data-copies="1">
+<section class="card rules" data-name="${name}" data-copies="${RULES_COPIES}">
   <div class="panel">
     <div class="head">
       <img class="logo" src="${svgUrl(read(game.art.icon))}" alt="">
