@@ -15,7 +15,7 @@
         "value": -1,
         "count": 2,
         "image": "art/backflip-bat.svg",
-        "text": "When this card is put face up in front of anyone, the round turns upside down (the lowest card wins the showdown), or back again. If you played it, everyone sees the card you keep.",
+        "text": "Once this is face up, the lowest card wins the showdown, until another Bat flips it back. If you play it, show everyone your card.",
         "onDiscard": [
           { "op": "flag", "id": "upsideDown", "to": "toggle" },
           {
@@ -34,7 +34,7 @@
         "valueLabel": "∞",
         "count": 1,
         "image": "art/galaxy-goldfish.svg",
-        "text": "Higher than any number. If you play it, it is last call: everyone else takes one more turn, then the showdown happens instead of your next turn. If you are knocked out first, there is no early showdown.",
+        "text": "Beats every number. If you play it, everyone else takes one more turn, then comes the showdown.",
         "onPlay": [
           { "op": "status", "who": "self", "id": "lastCall", "until": "endOfRound" },
           { "op": "log", "text": "Last call! Everyone else takes one more turn, then the showdown." }

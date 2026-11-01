@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "zip-pack": "node scripts/zip-pack.mjs"
+    "zip-pack": "node scripts/zip-pack.mjs",
+    "print-cards": "node scripts/print-cards.mjs"
   },
   "dependencies": {
     "trystero": "^0.26.0"

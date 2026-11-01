@@ -17,6 +17,9 @@ Read [docs/DESIGN.md](docs/DESIGN.md) before changing architecture, and
 - `npm run e2e` runs the Playwright browser tests in `e2e/` against the production build
   (`npx playwright install chromium` once per machine)
 - `npm run zip-pack -- <folder>` zips a game or addon folder for the lobby's Custom pack tile
+- `npm run print-cards` writes print files for Power Hungry Pets with all addons into `print/`
+  (70 x 120 mm cards as 300 dpi PNGs, and `preview.html` with the cut line). With the shop's
+  `ISOcoated_v2_300_eci.icc` in `print-profile/` (ignored), it also writes PDF/X-4 files
 
 ## Stack rules
 
@@ -77,6 +80,8 @@ network, no clock, seeded RNG, plain-JSON state. Only the host runs it.
 - `examples/my-first-addon` the tutorial's addon, to upload as a zip. A zip is a game
   (`pack.json`) or an addon for a game the lobby has (`addon.json` with `extends`)
 - `scripts/zip-pack.mjs` zips a pack folder, no dependencies
+- `scripts/print-cards.mjs` lays out the printed Power Hungry Pets deck and its two rules cards,
+  rendered with Playwright. `scripts/pdf-x4.mjs` writes those as PDF/X-4, no dependencies
 
 ## Testing locally
 

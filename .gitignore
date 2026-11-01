@@ -18,3 +18,7 @@ playwright-report/
 
 # Zipped examples, built with npm run zip-pack
 examples/**/*.zip
+
+# Print files, built with npm run print-cards
+print/
+print-profile/

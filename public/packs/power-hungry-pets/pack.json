@@ -85,7 +85,7 @@
       "value": 0,
       "count": 1,
       "image": "art/royal-robovac.svg",
-      "text": "No action. At the showdown, if anyone holds the King Cat, this is the highest card.",
+      "text": "No action. Beats every card at the showdown if anyone holds the King Cat.",
       "showdownValue": [
         { "if": { "anyHandHas": "king-cat" }, "value": "highest" }
       ]
@@ -156,7 +156,7 @@
       "value": 5,
       "count": 2,
       "image": "art/snake-sorcerer.svg",
-      "text": "Choose a player, you included. They put their card face up without its action and draw a new one.",
+      "text": "Choose a player, even yourself. They lay their card face up (no action) and draw a new one.",
       "onPlay": [
         { "op": "choosePlayer", "as": "t", "from": "all" },
         { "op": "discard", "who": "$t" },
@@ -190,7 +190,7 @@
       "value": 7,
       "count": 1,
       "image": "art/jittery-juggler.svg",
-      "text": "Everyone still in, you included, shuffles their card into the draw pile and gets a new one.",
+      "text": "Everyone still in shuffles their card into the draw pile and draws a new one.",
       "onPlay": [
         { "op": "selectPlayers", "as": "group", "from": "all" },
         { "op": "move", "from": "hand:$group", "to": "deck", "count": "all" },

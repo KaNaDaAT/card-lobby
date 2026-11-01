@@ -46,10 +46,10 @@ Here is Nosy Ferret from Second Litter:
 {
   "id": "nosy-ferret",
   "name": "Nosy Ferret",
-  "value": 2,
-  "count": 1,
+  "value": 1,
+  "count": 3,
   "image": "art/nosy-ferret.svg",
-  "text": "Choose another player and secretly look at their card.",
+  "text": "Secretly look at another player's card.",
   "onPlay": [
     { "op": "choosePlayer", "as": "t", "from": "others" },
     { "op": "reveal", "zone": "hand:$t", "to": "self" }
@@ -73,7 +73,7 @@ The two ops:
 2. `reveal` shows the cards in a zone to some players. `hand:$t` is the hand of the player
    stored as `t`. `to: "self"` means only the player who played the card.
 
-Change one word and you get Gossip Parrot, the 1 of the same addon: `"to": "all"` shows the
+Change one word and you get Gossip Parrot, the 6 of the same addon: `"to": "all"` shows the
 card to everyone.
 
 If an op has nothing to work with (everyone else is shielded, say), the rest of the card's ops
@@ -86,9 +86,9 @@ Each card in Second Litter shows another way to combine ops. Open the file next 
 
 | Card | Ops | What it shows |
 |---|---|---|
-| Pillow-Fight Panda | `discard`, `draw` with `fallback`, `if` with `in` | Forcing cards face up (a King Cat knocks out its holder), and only drawing for players still in |
 | Tunnel Mole | `move` to `deck` at `bottom`, `draw` | Moving a card between zones. Who knows a card is tracked for you |
 | Swapsie Squirrel | `choosePlayer` twice with `except`, `swap` | Picking two different players |
+| Pillow-Fight Panda | `discard`, `draw` with `fallback`, `if` with `in` | Forcing cards face up (a King Cat knocks out its holder), and only drawing for players still in |
 | Treasure Magpie | `peek` with `as`, `confirm`, `if` with `is`, `move` with `card` | Asking yes or no, and moving one particular card |
 | Penguin Parade | `selectPlayers`, `passHands` | Doing something to everyone at once, without asking |
 | Haggling Hamster | `reveal` to `self`, `confirm` with `{$t}` in its text, `swap` | Putting a player's name into a question |

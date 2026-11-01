@@ -178,3 +178,16 @@ Protocol version 5.
   its scroll when a count changes.
 - [x] **Seats**: the host picks how many players sit down, also more than the game is made for.
 - [x] **The eye**: a card in your hand shows who else knows it.
+
+## Playtest feedback, round 3
+
+- [x] **Second Litter rebalanced**: low pets come in more copies (three each of 1 to 3, two 4s
+  and 5s), so the deck is 37 cards. Nosy Ferret 1, Tunnel Mole 2, Swapsie Squirrel 3,
+  Pillow-Fight Panda 4, Treasure Magpie 5, Gossip Parrot 6.
+- [x] **Second Litter icon**: a rounded square with two paws, so it no longer looks like the
+  game's own round paw badge, and has no number to mistake for a card's value.
+- [x] **Shorter card texts**: eleven cards say the same in fewer words, in the app and in print.
+- [x] **Print files**: `npm run print-cards` lays out the game with all addons as 70 x 120 mm
+  cards for meinspiel.de: 80 with spares, and two rules cards in place of a rulebook.
+- [x] **Print PDF**: the same cards as PDF/X-4 at 600 dpi, with the shop's ISO Coated v2 300%
+  profile as output intent.
